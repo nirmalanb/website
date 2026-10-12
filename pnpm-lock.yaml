@@ -184,6 +184,9 @@ importers:
       astro-mermaid-satteri:
         specifier: ^0.3.3
         version: 0.3.3(@astrojs/markdown-satteri@0.4.3)(astro@7.3.8(@types/node@24.19.2)(jiti@2.7.0)(yaml@2.9.1))(mermaid@12.1.0)
+      domsure:
+        specifier: ^0.4.3
+        version: 0.4.3
       mermaid:
         specifier: ^12.1.0
         version: 12.1.0
@@ -1419,6 +1422,9 @@ packages:
 
   dompurify@3.4.16:
     resolution: {integrity: sha512-sqo+pNp3qRhCIpbgRi1y8Tgk27Bo2Ry7w0dC1NBeNTdZChWjz9Xb/KOoZbRP/R6pQZ80Qw8YhXw13hWWBbMRnQ==}
+
+  domsure@0.4.3:
+    resolution: {integrity: sha512-Nis6Vc+qYwUYezIPGRMb+nz8AvqAGIFL1fQWdGok5j0rIWexL8mkwq2tyk0ZF68T2/2y93e1Mqm5pxw+TVv8eQ==}
 
   domutils@3.2.2:
     resolution: {integrity: sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==}
@@ -3632,6 +3638,8 @@ snapshots:
   dompurify@3.4.16:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
+
+  domsure@0.4.3: {}
 
   domutils@3.2.2:
     dependencies:

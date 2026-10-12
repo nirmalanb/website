@@ -11,6 +11,7 @@ One-page professional site plus an MDX guide section for a cyber security engine
 | @astrojs/mdx | 8.x (guides) |
 | @astrojs/markdown-satteri | 0.4.x (markdown processor) |
 | astro-mermaid-satteri | 0.3.x (Mermaid in guides) |
+| domsure | 0.4.x (typed DOM queries, JWT tool only) |
 | Package manager | pnpm |
 | Shipped JS | none on the core page; guide pages load the Mermaid runtime; the JWT tool ships one bundled script |
 
@@ -18,7 +19,9 @@ One-page professional site plus an MDX guide section for a cyber security engine
 
 `/tools/jwt-decoder/` is a client-side JWT debugger — an educational clone of jwt.io's, themed to this site's palette (it keeps jwt.io's red/violet/blue segment coding, which is a functional affordance rather than decoration). Paste a token to decode its header and payload, read them as a collapsible, syntax-coloured JSON tree or a human-readable claims breakdown, and verify the signature for `HS*`, `RS*`, `PS*` and `ES*`. **Edit in Encoder →** hands the decoded header and payload to the Encoder so you can change a claim and re-sign; it carries the secret over only when the Decoder actually verified the original token with it, so an edited token is never silently signed with the wrong key. The Encoder covers the same algorithms plus `none` (unsecured JWT), and generates RSA/EC key pairs. All crypto runs through the Web Crypto API in the browser — no token leaves the page.
 
-The app logic lives in `src/scripts/jwt-decoder.js` (verbatim crypto core, exercised by `test/jwt-decoder.test.mjs` against `node:crypto`). The page carries a `data-tool-mount` marker; the `strip-mermaid-script` integration grants exactly one script to marked pages and throws if the count is anything but one, so the tool can never silently lose its bundle to the Mermaid-stripping rule. Tool styles are global (`<style is:global>` in the page) because badges, claims tables and token spans are injected via `innerHTML` and would never match Astro's scoped selectors.
+The tool is authored in TypeScript and split under `src/scripts/jwt/`: `jwt-crypto.ts` (pure JWS sign/verify + base64url/PEM, no DOM), `jwt-view.ts` (JSON-tree / claims / badge string builders), `jwt-decoder.ts` and `jwt-encoder.ts` (the two panels), `jwt-tool.ts` (entry: tabs, the cross-panel handoff, boot, test hook) and `jwt-ui.ts` (shared Tailwind class constants). Adding an algorithm is a row in the `JWS` table in `jwt-crypto.ts`, not a new branch. DOM queries go through `domsure` (`$.required('#id')`, typed), the tool's only runtime dependency; it is bundled into the tool's single script and never reaches the core page.
+
+The crypto is exercised by `test/jwt-decoder.test.mjs` against `node:crypto` (HMAC byte-for-byte, RSA/PS/EC accept-and-reject). The page carries a `data-tool-mount` marker; the `strip-mermaid-script` integration grants exactly one script to marked pages and throws if the count is anything but one, so the tool can never silently lose its bundle to the Mermaid-stripping rule. Styling is Tailwind-only: the class strings are shared between the Astro components and the runtime-generated HTML via `jwt-ui.ts`, so nothing relies on scoped selectors matching `innerHTML` output.
 
 Tailwind v4 runs as a Vite plugin, so there is **no `tailwind.config.js` and no `postcss.config.js`**. Design tokens live in the `@theme` block of `src/styles/global.css`.
 
@@ -98,13 +101,15 @@ src/
 ├─ layouts/Layout.astro      # html shell, fonts, meta, OG tags, skip link
 ├─ pages/index.astro         # page composition
 ├─ pages/guides/             # guide listing + [slug].astro post pages
-├─ pages/tools/jwt-decoder.astro # client-side JWT debugger (one bundled script)
+├─ pages/tools/jwt-decoder.astro # JWT debugger page (one bundled script)
 ├─ pages/search-index.json.ts # build-time JSON index for guide search
 ├─ pages/404.astro           # not-found page
 ├─ scripts/search.ts         # guide search filter (the one allowed script)
-├─ scripts/jwt-decoder.js    # JWT decode/verify/sign crypto core
+├─ scripts/jwt/              # JWT tool — crypto, view, panels, entry, class constants
 ├─ styles/global.css         # @theme tokens, .link, .prose, mermaid + code styles, print block
 └─ components/
+   ├─ tools/JwtDecoder.astro # decoder panel markup
+   ├─ tools/JwtEncoder.astro # encoder panel markup
    ├─ Header.astro           # monogram, name, sticky nav
    ├─ Intro.astro            # name, role, summary, contact
    ├─ Section.astro          # section heading + rule + scroll offset

@@ -4,7 +4,7 @@ import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import JwtDecoder from '../../components/tools/JwtDecoder.astro';
 import JwtEncoder from '../../components/tools/JwtEncoder.astro';
-import { CLS } from '../../scripts/jwt-ui.ts';
+import { CLS } from '../../scripts/jwt/jwt-ui.ts';
 ---
 
 <Layout
@@ -67,5 +67,5 @@ import { CLS } from '../../scripts/jwt-ui.ts';
 </Layout>
 
 <script>
-  import '../../scripts/jwt-decoder.ts';
+  import '../../scripts/jwt/jwt-tool.ts';
 </script>

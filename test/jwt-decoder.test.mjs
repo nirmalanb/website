@@ -42,6 +42,8 @@ function mkEl(sel) {
 }
 globalThis.document = {
   querySelector(sel){ if(!nodes.has(sel)) nodes.set(sel, mkEl(sel)); return nodes.get(sel); },
+  // domsure's fast path for bare `#id` selectors goes through getElementById.
+  getElementById(id){ return this.querySelector("#" + id); },
   querySelectorAll(){ return []; },
   createElement(){ return mkEl("created"); },
   body: { appendChild(){} },
@@ -54,7 +56,7 @@ try { globalThis.navigator = { clipboard: { writeText: async () => {} } }; }
 catch { Object.defineProperty(globalThis, "navigator", { value: { clipboard: { writeText: async () => {} } }, configurable: true }); }
 
 // Execute the shipped script now that the DOM shim exists.
-await import("../src/scripts/jwt-decoder.ts");
+await import("../src/scripts/jwt/jwt-tool.ts");
 
 const api = globalThis.__jwtDebugger;
 assert(api, "__jwtDebugger hook missing");
@@ -192,7 +194,7 @@ assert.ok(markup.includes("data-tool-mount"), "tool page must keep its data-tool
 ok("tool page declares data-tool-mount for the build's script budget");
 
 /* ------------------- 8. JSON viewer ------------------------------------- */
-const { CLS } = await import("../src/scripts/jwt-ui.ts");
+const { CLS } = await import("../src/scripts/jwt/jwt-ui.ts");
 const tree = api.jsonTreeView({
   evil: '<img src=x onerror=alert(1)>',
   n: 5,
