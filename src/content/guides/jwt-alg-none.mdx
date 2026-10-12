@@ -1,6 +1,6 @@
 ---
 title: 'JWT alg:none: No Signature, No Problem'
-excerpt: Every JWT names its own signing algorithm inside the token, and the attacker writes the token. Flip alg to none, drop the signature, and a verifier that trusts the header will accept a token nobody signed. Here is how the attack works and the one-line fix.
+excerpt: Every JWT names its own signing algorithm in the header, and the attacker writes the header. Flip alg to none, drop the signature, and a verifier that trusts the token will accept a token nobody signed. Here is how the attack works, and the one line that stops it.
 publishDate: 'Oct 12 2026'
 isPublished: true
 tags:
@@ -10,13 +10,13 @@ tags:
   - Web Security
 ---
 
-A JWT carries its own instructions for how to be verified. The header names a signing algorithm in the `alg` field, and the server is expected to read it, then check the signature with that algorithm. The `alg` field lives inside the token. Whoever holds the token writes the header. That is the whole vulnerability in one sentence.
+A JWT carries its own instructions for how to be checked. The header names a signing algorithm in the `alg` field, and the server is expected to read it and verify against that algorithm. The header sits inside the token. Whoever holds the token writes the header. That last sentence is the whole vulnerability.
 
-`none` is not a typo or a missing value. It is a defined algorithm in the JWT spec. An "Unsecured JWT" is a JWS with `"alg":"none"` and an empty signature, intended for cases where the token is protected by something outside itself, such as a signature on a document that contains it (RFC 7519 §6). The spec allows it. Verifiers that trusted the header allowed it too much.
+`none` is not a typo or a missing value. The JWT spec defines it. An "Unsecured JWT" is a JWS with `"alg":"none"` and an empty signature, meant for tokens already protected by something outside themselves, like a signature on the document that wraps them (RFC 7519 §6). The spec allows it. Verifiers that took the header at its word allowed it far too much.
 
 ## The Attack, Step by Step
 
-The attacker starts with any valid token, decodes it, rewrites the header so `alg` is `none`, edits the claims to whatever they want, and appends an empty signature. The token still parses as three base64url segments joined by dots. It just has nothing after the last dot.
+The attacker takes any valid token, decodes it, rewrites the header so `alg` is `none`, edits the claims, and leaves the signature empty. The result still parses as three base64url segments joined by dots. It just has nothing after the last dot.
 
 ```mermaid
 graph LR
@@ -37,7 +37,7 @@ payload  eyJzdWIiOiIxMjM0Iiwicm9sZSI6InVzZXIiLCJpYXQiOjE1MTYyMzkwMjJ9
 token    eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0Iiwicm9sZSI6InVzZXIiLCJpYXQiOjE1MTYyMzkwMjJ9.nywLMb0WITAsHzqVeyuu0aQ_nwOftD9mEe9iQzuQQmA
 ```
 
-The claims are `{"sub":"1234","role":"user","iat":1516239022}`. The attacker wants `role` to say `admin`, so they re-encode the header and payload and leave the signature empty:
+The claims are `{"sub":"1234","role":"user","iat":1516239022}`. The attacker wants `role` to read `admin`, so they re-encode the header and payload and drop the signature:
 
 ```text
 {"alg":"none","typ":"JWT"}                     -> eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0
@@ -46,39 +46,29 @@ The claims are `{"sub":"1234","role":"user","iat":1516239022}`. The attacker wan
 forged = header + "." + payload + "."
 ```
 
-The result is a valid-looking three-part token with no signature at all:
+The result looks like a normal three-part token. Nothing signed it.
 
 ```text
 eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0Iiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNTE2MjM5MDIyfQ.
 ```
 
-Paste that into the [JWT debugger](/tools/jwt-decoder/) and it decodes cleanly, but the status row flags it: `Valid JWT` next to a warning badge reading `Unsigned (alg: none)`. The signature field is empty on purpose. Nothing was signed. The debugger is doing exactly what a hardened verifier should do and what a broken one fails to do: noticing that there is no signature to trust.
+Paste it into the [JWT debugger](/tools/jwt-decoder/) and it decodes cleanly. The status row still flags it: `Valid JWT` beside a warning badge that reads `Unsigned (alg: none)`. The signature segment is empty on purpose. The debugger notices there is no signature to trust, which is exactly what a hardened verifier does and what a broken one fails to do.
 
 ## Why It Works
 
-Verification has a circular trust problem. To check the signature, the server must know which algorithm to use. The only place that information is offered is the header, and the header is part of the thing being verified. The server has to decide how to verify before it has verified anything.
+Verification has a circular trust problem. To check the signature, the server has to know which algorithm to use. The only place that information is offered is the header, and the header is part of what is being verified. The server must decide how to verify before it has verified anything.
 
-A hand-written verifier that switches on `header.alg` and includes a `none` branch ends up saying "no signature to check, therefore valid". If the code path is `if (alg === 'none') return payload;`, the attacker simply chooses that path. No key, no secret, no public key, nothing. The signature is not forged; it is skipped.
+A hand-written verifier that switches on `header.alg` and includes a `none` branch says "no signature to check, so it's valid". If that branch is `if (alg === 'none') return payload;`, the attacker just picks it. No key, no secret, no public key. Nothing is forged. The check is skipped.
 
-Two related bug classes came out of this pattern in 2015:
-
-- **`alg: none` accepted as verified.** Some libraries returned success for unsigned tokens even when the caller supplied a key. Tim McLean documented this across several libraries in ["Critical vulnerabilities in JSON Web Token libraries"](https://www.timmclean.net/2015/02/25/jwt-alg-none.html).
-- **Algorithm confusion.** Even libraries that rejected `none` still let the attacker pick among real algorithms. If a server expected RS256 (verify with the public key) and an attacker sent a token claiming HS256 (verify with an HMAC secret), the library would use the RSA public key as the HMAC secret. The public key is public, so the attacker could sign tokens the server accepted. That one is [CVE-2015-9235](https://nvd.nist.gov/vuln/detail/CVE-2015-9235) (node-jsonwebtoken before 4.2.2) and is a distinct attack from `alg: none`, worth its own guide later.
-
-RFC 8725 §2.1 lists both under "Weak Signatures and Insufficient Signature Validation". The root cause is shared: the verifier treated the attacker-controlled header as configuration.
+Two bug classes came out of this pattern in 2015. Some libraries returned success for unsigned tokens even when the caller supplied a key; Tim McLean documented that across several libraries in ["Critical vulnerabilities in JSON Web Token libraries"](https://www.timmclean.net/2015/02/25/jwt-alg-none.html). Others rejected `none` but still let the attacker pick among real algorithms. If a server expected RS256 and an attacker sent a token claiming HS256, the library would use the RSA public key as the HMAC secret. The public key is public, so the attacker could sign a token the server accepted. That second one is [CVE-2015-9235](https://nvd.nist.gov/vuln/detail/CVE-2015-9235) (node-jsonwebtoken before 4.2.2), a distinct attack worth its own guide later. RFC 8725 §2.1 lists both under "Weak Signatures and Insufficient Signature Validation". The root cause is shared: the verifier treated the attacker's header as configuration.
 
 ## Where You Still See It
 
-This is not a museum piece. It shows up whenever the code trusts the header instead of pinning its own expectation:
-
-- Middleware that decodes with `jwt.decode` (which does not verify) and then checks claims, instead of calling `jwt.verify`.
-- Libraries called without an explicit algorithm option, so their default is "read the header".
-- Older API gateways and internal services that predate the fix, still reachable from the outside.
-- CTF and lab boxes, constantly, which is where most people meet it.
+This is not a museum piece. It turns up wherever code trusts the header instead of pinning its own expectation. Middleware decodes with `jwt.decode`, which does not verify, then trusts the claims instead of calling `jwt.verify`. Libraries get called without an explicit algorithm option, so their default is to read the header. Older API gateways and internal services predate the fix and are still reachable from outside. CTF and lab boxes run it constantly, which is where most people meet it.
 
 ## The Real Fix
 
-One rule covers the whole class: **the expected algorithm is server configuration, not token data.** The verifier should already know which algorithm it will accept and must not take that decision from the header.
+One rule covers the whole class: **the expected algorithm is server configuration, not token data.** The verifier already knows which algorithm it will accept. It must not take that decision from the header.
 
 ```js
 // Node — node-jsonwebtoken
@@ -92,22 +82,19 @@ jwt.verify(token, publicKey, { algorithms: ['RS256'] });
 jwt.decode(token, public_key, algorithms=["RS256"])
 ```
 
-Two supporting rules from RFC 8725 §3.1 keep the door shut even if a library misbehaves:
+Two rules from RFC 8725 §3.1 keep the door shut even if a library misbehaves. Bind each key to exactly one algorithm, so a public RSA key can never be pressed into service as an HMAC secret. Never consume `none` in an auth path: RFC 8725 §3.2 says libraries should not accept it unless the caller explicitly asks, and you never need to ask. Reject it before the signature logic runs.
 
-- **Each key maps to exactly one algorithm.** Bind the key to the algorithm rather than letting the algorithm and key be supplied independently, so a public RSA key can never be pressed into service as an HMAC secret.
-- **Never consume `none`.** RFC 8725 §3.2 says libraries should not consume tokens using `none` unless the caller explicitly asked for it. In an authentication path, you never have a reason to. Reject it before the signature logic runs.
-
-And the closing note of RFC 7519 §7.2 is worth reading twice: a JWT can be cryptographically valid and still be one your application must reject, because it is an *application* decision which algorithms are acceptable.
+The closing note of RFC 7519 §7.2 is worth reading twice. A JWT can be cryptographically valid and still be one your application must reject, because the acceptable algorithms are an application decision.
 
 ## Test It Yourself
 
-Everything here is reproducible in the [JWT debugger](/tools/jwt-decoder/) with no server and no token leaving the page:
+Everything here runs in the [JWT debugger](/tools/jwt-decoder/). No server, and no token leaves the page.
 
-1. Paste the legitimate HS256 token above. It decodes to `role: user` and, with the secret `secret`, verifies.
-2. Paste the forged `alg: none` token. It decodes to `role: admin`, flags `Unsigned (alg: none)`, and there is nothing to verify — the signature segment is empty.
-3. Open the **Encoder** tab and pick `none` from the algorithm list to mint your own unsigned token, then bring it back to the decoder and watch it get flagged. Seeing the tool refuse to treat an unsigned token as verified is the same judgement your server code needs to make.
+1. Paste the legitimate HS256 token above. It decodes to `role: user` and verifies with the secret `secret`.
+2. Paste the forged `alg: none` token. It decodes to `role: admin`, flags `Unsigned (alg: none)`, and has nothing to verify, because the signature segment is empty.
+3. Open the **Encoder** tab and pick `none` to mint your own unsigned token. Bring it back to the decoder and watch it get flagged. That refusal to treat an unsigned token as verified is the same call your server code has to make.
 
-If the structure of the header and payload is new to you, the [JWT vs OAuth 2.0](/guides/jwt-oauth/) guide walks through the three segments first.
+If the three segments are new to you, start with [JWT vs OAuth 2.0](/guides/jwt-oauth/).
 
 ---
 
