@@ -144,8 +144,53 @@ function relTime(sec){
     }
   }
 }
+function jtPrimitive(v){
+  if (v === null) return '<span class="jt-null">null</span>';
+  const t = typeof v;
+  if (t === "number") return '<span class="jt-num">' + esc(String(v)) + '</span>';
+  if (t === "boolean") return '<span class="jt-bool">' + String(v) + '</span>';
+  if (t === "string") return '<span class="jt-str">' + esc(JSON.stringify(v)) + '</span>';
+  return '<span class="jt-null">' + esc(String(v)) + '</span>';
+}
+function jtKey(key, isIndex){
+  if (key === null) return "";
+  return isIndex
+    ? '<span class="jt-idx">' + esc(key) + '</span><span class="jt-punct">: </span>'
+    : '<span class="jt-key">' + esc(JSON.stringify(key)) + '</span><span class="jt-punct">: </span>';
+}
+function jtNode(value, key, depth, isIndex){
+  const pad = "padding-left:" + depth * 14 + "px";
+  const head = jtKey(key, isIndex);
+  if (value !== null && typeof value === "object"){
+    const isArr = Array.isArray(value);
+    const entries = isArr ? value.map((v,i) => [String(i), v]) : Object.entries(value);
+    const open = isArr ? "[" : "{", close = isArr ? "]" : "}";
+    if (!entries.length){
+      return '<div class="jt-line" style="' + pad + '">' + head + '<span class="jt-punct">' + open + close + '</span></div>';
+    }
+    let inner = "";
+    for (const [k,v] of entries) inner += jtNode(v, k, depth + 1, isArr);
+    return '<details class="jt-obj" open><summary class="jt-line" style="' + pad + '">' + head
+      + '<span class="jt-punct">' + open + '</span>'
+      + '<span class="jt-count">' + entries.length + (isArr ? " items" : " keys") + '</span>'
+      + '<span class="jt-punct">' + close + '</span></summary>' + inner + '</details>';
+  }
+  return '<div class="jt-line" style="' + pad + '">' + head + jtPrimitive(value) + '</div>';
+}
+// Collapsible, syntax-coloured JSON view. Every string goes through esc(JSON.stringify(...))
+// so a malicious claim can never inject markup.
+function jsonTreeView(obj){
+  return '<div class="json-tree">' + jtNode(obj, null, 0, false) + '</div>';
+}
 function jsonPane(obj){
-  return '<pre class="mono">' + esc(JSON.stringify(obj,null,2)) + '</pre>';
+  return jsonTreeView(obj);
+}
+// Cache the rendered key on the pane so identical re-renders are skipped — that keeps a
+// user's collapsed/expanded <details> state across keystroke-by-keystroke decoding.
+function setPaneHtml(body, key, html){
+  if (body.dataset && body.dataset.jwtKey === key) return;
+  if (body.dataset) body.dataset.jwtKey = key;
+  body.innerHTML = html;
 }
 function claimsPane(obj, headerMode){
   const keys = Object.keys(obj||{});
@@ -173,7 +218,7 @@ const headerBody = $("#headerBody");
 const payloadBody = $("#payloadBody");
 const secretInput = $("#secretInput");
 
-let state = { raw:"", parts:[], header:null, payload:null, headerRaw:"", payloadRaw:"", sigRaw:"", headerErr:null, payloadErr:null, alg:null };
+let state = { raw:"", parts:[], header:null, payload:null, headerRaw:"", payloadRaw:"", sigRaw:"", headerErr:null, payloadErr:null, alg:null, verifiedKey:null };
 let verifyToken = 0;
 
 function colorizeToken(raw){
@@ -203,13 +248,15 @@ function decodeToken(){
   state.parts = raw ? raw.split(".") : [];
   state.header = state.payload = null;
   state.headerErr = state.payloadErr = null;
+  state.verifiedKey = null;
+  $("#decMsg").innerHTML = "";
   state.headerRaw = state.parts[0] || "";
   state.payloadRaw = state.parts[1] || "";
   state.sigRaw = state.parts[2] || "";
 
   if (!raw){
-    headerBody.innerHTML = '<div class="empty">Paste a token above to see the decoded header.</div>';
-    payloadBody.innerHTML = '<div class="empty">Paste a token above to see the decoded payload.</div>';
+    setPaneHtml(headerBody, "empty:header", '<div class="empty">Paste a token above to see the decoded header.</div>');
+    setPaneHtml(payloadBody, "empty:payload", '<div class="empty">Paste a token above to see the decoded payload.</div>');
     statusRow.innerHTML = "";
     setSecretLabel(null);
     return;
@@ -220,7 +267,7 @@ function decodeToken(){
     try {
       const txt = decodeSegment(state.parts[0], "Header");
       state.header = JSON.parse(txt);
-      headerBody.innerHTML = jsonPane(state.header);
+      setPaneHtml(headerBody, "json:" + JSON.stringify(state.header), jsonPane(state.header));
     } catch(e){ state.headerErr = e.message; }
   }
   // payload
@@ -228,11 +275,11 @@ function decodeToken(){
     try {
       const txt = decodeSegment(state.parts[1], "Payload");
       state.payload = JSON.parse(txt);
-      payloadBody.innerHTML = jsonPane(state.payload);
+      setPaneHtml(payloadBody, "json:" + JSON.stringify(state.payload), jsonPane(state.payload));
     } catch(e){ state.payloadErr = e.message; }
   }
-  if (state.headerErr) headerBody.innerHTML = '<div class="empty">Could not decode header: ' + esc(state.headerErr) + "</div>";
-  if (state.payloadErr) payloadBody.innerHTML = '<div class="empty">Could not decode payload: ' + esc(state.payloadErr) + "</div>";
+  if (state.headerErr) setPaneHtml(headerBody, "err:header:" + state.headerErr, '<div class="empty">Could not decode header: ' + esc(state.headerErr) + "</div>");
+  if (state.payloadErr) setPaneHtml(payloadBody, "err:payload:" + state.payloadErr, '<div class="empty">Could not decode payload: ' + esc(state.payloadErr) + "</div>");
 
   state.alg = state.header && state.header.alg ? String(state.header.alg) : null;
   setSecretLabel(state.alg);
@@ -245,6 +292,7 @@ function decodeToken(){
 function setSecretLabel(alg){
   const label = $("#secretLabel");
   if (!alg){ label.textContent = "Secret"; return; }
+  if (alg === "none"){ label.textContent = "No key needed (alg: none, unsigned)"; return; }
   if (alg.startsWith("HS")) label.textContent = "Secret (HMAC key used to sign)";
   else if (alg.startsWith("RS")) label.textContent = "Public Key (PEM, RSASSA-PKCS1-v1_5)";
   else if (alg.startsWith("PS")) label.textContent = "Public Key (PEM, RSA-PSS)";
@@ -262,6 +310,8 @@ function renderStatus(){
   if (n !== 3) b.push(badge("bad", n < 3 ? "Incomplete JWT (" + n + " of 3 segments)" : "Invalid JWT (" + n + " segments)"));
   else if (!hasJson) b.push(badge("bad","Invalid JWT — segments are not valid JSON"));
   else b.push(badge("ok","Valid JWT"));
+
+  if (state.alg === "none") b.push(badge("warn","Unsigned (alg: none)"));
 
   if (state.payload && typeof state.payload.exp === "number"){
     if (Date.now() >= state.payload.exp*1000) b.push(badge("bad","Expired " + relTime(state.payload.exp) + " ago"));
@@ -281,7 +331,17 @@ function renderStatus(){
 function scheduleVerify(){
   const id = ++verifyToken;
   const key = secretInput.value;
-  if (!state.raw || state.parts.length !== 3 || !state.alg || !key){
+  if (!state.raw || state.parts.length !== 3 || !state.alg){
+    return;
+  }
+  if (state.alg === "none"){
+    const el = $("#sigBadge");
+    if (el) el.innerHTML = badge("warn", "Unsigned token (alg: none)");
+    const st = $("#secretState");
+    if (st) st.innerHTML = '<span style="color:var(--warn)">This token declares alg "none" and carries no signature.</span>';
+    return;
+  }
+  if (!key){
     return;
   }
   runVerify(id, key, state.raw, state.alg);
@@ -298,6 +358,7 @@ async function runVerify(id, key, raw, alg){
     catch(e){ throw new Error("Could not load the " + (alg.startsWith("HS") ? "secret" : "PEM public key") + ": " + e.message); }
     const ok = await crypto.subtle.verify(verifyParams(alg), k, sigBytes, data);
     if (id !== verifyToken) return;
+    state.verifiedKey = ok ? key : null;
     const el = slot();
     if (el) el.innerHTML = ok ? badge("ok","Signature Verified (" + alg + ")") : badge("bad","Invalid Signature (" + alg + ")");
     $("#secretState").innerHTML = ok
@@ -305,6 +366,7 @@ async function runVerify(id, key, raw, alg){
       : '<span style="color:var(--bad)">Key does not produce the token’s signature.</span>';
   } catch(err){
     if (id !== verifyToken) return;
+    state.verifiedKey = null;
     const el = slot();
     // A malformed signature segment is a definite failure, not an "error".
     const malformed = /not valid base64url|could not be base64url-decoded/i.test(err.message);
@@ -321,7 +383,8 @@ function refreshClaimsView(which){
   const obj = which === "header" ? state.header : state.payload;
   const body = which === "header" ? headerBody : payloadBody;
   if (!obj) return;
-  body.innerHTML = view === "claims" ? claimsPane(obj, which==="header") : jsonPane(obj);
+  const html = view === "claims" ? claimsPane(obj, which==="header") : jsonPane(obj);
+  setPaneHtml(body, view + ":" + JSON.stringify(obj), html);
 }
 
 /* ------------------------------------------------- decoder wiring */
@@ -356,6 +419,26 @@ $("#btnClearToken").addEventListener("click", ()=>{ tokInput.value = ""; renderT
 $("#btnExampleSecret").addEventListener("click", ()=>{ secretInput.value = EXAMPLE_SECRET; $('#secretState').textContent = ""; scheduleVerify(); });
 $("#btnClearSecret").addEventListener("click", ()=>{ secretInput.value = ""; $("#secretState").textContent = ""; scheduleVerify(); });
 
+// Decoder → Encoder: load the decoded header/payload for editing. The secret is only
+// carried over when the Decoder actually verified the original token with it — carrying a
+// prefilled demo secret would silently re-sign an edited payload with the wrong key.
+$("#btnDecodeToEncode").addEventListener("click", ()=>{
+  try {
+    if (!state.header || !state.payload) throw new Error("Paste a JWT with a decodable header and payload first.");
+    const secret = secretInput.value;
+    loadIntoEncoder(state.header, state.payload, state.alg, {
+      secret,
+      verified: !!state.verifiedKey && state.verifiedKey === secret,
+    });
+    $("#decMsg").innerHTML = "";
+    setTab("encode");
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
+    window.scrollTo({ top: 0, behavior: reduce ? "smooth" : "auto" });
+  } catch(e){
+    $("#decMsg").innerHTML = '<span class="err">' + esc(e.message) + "</span>";
+  }
+});
+
 /* ------------------------------------------------------------- encoder */
 const encHeader = $("#encHeader");
 const encPayload = $("#encPayload");
@@ -367,6 +450,14 @@ let lastSignedToken = "";
 
 function encKeyLabelUpdate(){
   const alg = encAlg.value || "HS256";
+  if (alg === "none"){
+    $("#encKeyLabel").textContent = "No key — alg: none emits an unsigned token";
+    $("#btnGenKeys").classList.add("hidden");
+    $("#pubKeyWrap").classList.add("hidden");
+    encKey.value = "";
+    encKey.placeholder = "Not used for alg: none";
+    return;
+  }
   const isHMAC = alg.startsWith("HS");
   $("#encKeyLabel").textContent = isHMAC
     ? "Secret (raw text or base64url)"
@@ -380,7 +471,7 @@ function encKeyLabelUpdate(){
   }
   if (isHMAC && !encKey.value) encKey.value = "a-string-secret-at-least-256-bits-long";
 }
-encAlg.addEventListener("change", ()=>{ encKeyLabelUpdate(); encMsg.innerHTML = ""; });
+encAlg.addEventListener("change", ()=>{ encKeyLabelUpdate(); $("#encKeyState").textContent = ""; encMsg.innerHTML = ""; });
 encKeyLabelUpdate();
 
 $("#btnEncExample").addEventListener("click", ()=>{
@@ -399,6 +490,16 @@ async function signToken(){
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Payload must be a JSON object.");
 
   header.alg = alg;
+  if (alg === "none"){
+    // RFC 7519 unsecured JWT: "<header>.<payload>." — empty signature segment.
+    const b64h = strToB64url(JSON.stringify(header));
+    const b64p = strToB64url(JSON.stringify(payload));
+    const token = b64h + "." + b64p + ".";
+    encHeader.value = JSON.stringify(header, null, 2);
+    encOut.innerHTML = colorizeToken(token).replace(/\n$/,"");
+    lastSignedToken = token;
+    return token;
+  }
   const keyText = encKey.value.trim();
   if (!keyText) throw new Error(alg.startsWith("HS") ? "Enter a secret." : "Paste a PEM private key (or generate a key pair).");
 
@@ -449,8 +550,12 @@ async function roundTripVerify(token, alg, keyText){
 $("#btnVerifyOwn").addEventListener("click", async ()=>{
   encMsg.innerHTML = "";
   try {
-    const token = await signToken();
     const alg = encAlg.value || "HS256";
+    const token = await signToken();
+    if (alg === "none"){
+      encMsg.innerHTML = '<div class="okmsg">Unsigned token created (alg: none) — there is no signature to verify.</div>';
+      return;
+    }
     const ok = await roundTripVerify(token, alg, encKey.value.trim());
     encMsg.innerHTML = ok
       ? '<div class="okmsg">Round-trip OK — ' + (alg.startsWith("HS") ? "the secret" : "a public key derived from your private key") + " verifies this token.</div>"
@@ -528,6 +633,44 @@ $("#btnGenKeys").addEventListener("click", async ()=>{
   } catch(e){ encMsg.innerHTML = '<div class="err">' + esc(e.message) + "</div>"; }
 });
 
+// Populate the Encoder from a decoded token. Pure state change so it is testable without
+// a DOM click; the caller switches tabs. Callers pass { secret, verified }.
+function loadIntoEncoder(header, payload, alg, keyInfo){
+  if (!header || typeof header !== "object" || Array.isArray(header)) throw new Error("Nothing to send — paste a decodable token first.");
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("The decoded payload is not a JSON object.");
+  encHeader.value = JSON.stringify(header, null, 2);
+  encPayload.value = JSON.stringify(payload, null, 2);
+  lastSignedToken = "";
+  encOut.innerHTML = "—";
+  encMsg.innerHTML = "";
+
+  const info = keyInfo || {};
+  const opts = encAlg.options;
+  const allowed = !alg || !opts || Array.from(opts).some((o) => o.value === alg);
+  if (alg && allowed) encAlg.value = alg;
+  encKeyLabelUpdate();
+
+  const isHMAC = !!alg && alg.startsWith("HS");
+  if (alg === "none"){
+    $("#encKeyState").textContent = "Unsigned (alg: none) — no key required.";
+  } else if (isHMAC && info.verified && info.secret){
+    // After encKeyLabelUpdate, which otherwise refills an empty HMAC key with the demo secret.
+    encKey.value = info.secret;
+    $("#encKeyState").textContent = "Secret carried over from a token the Decoder verified.";
+  } else if (isHMAC){
+    encKey.value = "";
+    $("#encKeyState").textContent = "Paste the secret used to sign the original token.";
+  } else if (alg && !allowed){
+    encKey.value = "";
+    $("#encKeyState").textContent = "‘" + alg + "’ can’t be used to sign here; the picker kept " + encAlg.value + ".";
+  } else if (alg){
+    encKey.value = "";
+    $("#encKeyState").textContent = "Paste the private key for " + alg + " to re-sign this token.";
+  } else {
+    $("#encKeyState").textContent = "";
+  }
+}
+
 /* --------------------------------------------------------------- tabs */
 $("#tabDecode").addEventListener("click", ()=>{ setTab("decode"); });
 $("#tabEncode").addEventListener("click", ()=>{ setTab("encode"); });
@@ -552,5 +695,5 @@ renderTokenLayer();
 decodeToken();
 
 // expose a tiny hook for automated tests
-window.__jwtDebugger = { b64urlToBytes, strToB64url, pemToDer, derToPem, importVerifyKey, importSignKey, signToken, decodeToken, verifyTokenWithKey, roundTripVerify, publicKeyFromPrivatePem, decodeSegment };
+window.__jwtDebugger = { b64urlToBytes, strToB64url, pemToDer, derToPem, importVerifyKey, importSignKey, signToken, decodeToken, verifyTokenWithKey, roundTripVerify, publicKeyFromPrivatePem, decodeSegment, jsonTreeView, loadIntoEncoder };
 })();

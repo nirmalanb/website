@@ -178,4 +178,63 @@ ok("every statically referenced DOM id exists in the .astro markup");
 assert.ok(astro.includes("data-tool-mount"), "tool page must keep its data-tool-mount marker");
 ok("tool page declares data-tool-mount for the build's script budget");
 
+/* ------------------- 8. JSON viewer ------------------------------------- */
+const tree = api.jsonTreeView({
+  evil: '<img src=x onerror=alert(1)>',
+  n: 5,
+  b: true,
+  z: null,
+  arr: [1, 2],
+  empty: {},
+});
+assert.strictEqual(tree.includes("<img"), false, "tree viewer must escape claim strings (XSS)");
+assert.ok(tree.includes("&lt;img"), "tree viewer should show the escaped string");
+for (const cls of ["jt-key", "jt-str", "jt-num", "jt-bool", "jt-null", "jt-punct", "jt-count"]) {
+  assert.ok(tree.includes(cls), "tree viewer missing ." + cls);
+}
+assert.ok(tree.includes("<details"), "nested objects should be collapsible");
+assert.ok(api.jsonTreeView({}).includes("{}"), "empty object should render {}");
+assert.ok(api.jsonTreeView([]).includes("[]"), "empty array should render []");
+ok("JSON tree viewer escapes input, colours types and collapses objects");
+
+/* --------------- 9. decoder panes render the tree ----------------------- */
+const tokEl = globalThis.document.querySelector("#tokInput");
+const statusEl = globalThis.document.querySelector("#statusRow");
+const headerEl = globalThis.document.querySelector("#headerBody");
+tokEl.value = DEMO;
+api.decodeToken();
+assert.ok(headerEl.innerHTML.includes("json-tree"), "header pane should use the JSON tree");
+assert.ok(statusEl.innerHTML.includes("Valid JWT"), "demo token should show a valid badge");
+const firstKey = headerEl.dataset.jwtKey;
+api.decodeToken();
+assert.strictEqual(headerEl.dataset.jwtKey, firstKey, "unchanged JSON should not re-render (keeps collapse state)");
+ok("decoder panes use the cached JSON tree view");
+
+/* --------------- 10. alg: none (unsecured JWT) -------------------------- */
+{
+  const t = await sign("none", "ignored", { typ: "JWT" }, { sub: "unsigned" });
+  const p = parts(t);
+  assert.strictEqual(t.split(".").length, 3, "none JWT still has three segments");
+  assert.strictEqual(p.s, "", "none JWT signature segment must be empty");
+  assert.strictEqual(JSON.parse(Buffer.from(p.h, "base64url").toString()).alg, "none");
+  tokEl.value = t;
+  api.decodeToken();
+  assert.ok(statusEl.innerHTML.includes("alg: none"), "decoder should flag an unsigned token");
+  ok("alg: none signs an unsigned token and the decoder flags it");
+}
+
+/* -------- 11. decoder → encoder carries only a verified secret ---------- */
+const encKeyEl = globalThis.document.querySelector("#encKey");
+const encAlgEl = globalThis.document.querySelector("#encAlg");
+api.loadIntoEncoder({ alg: "HS256", typ: "JWT" }, { sub: "a" }, "HS256", { secret: "s3cr3t", verified: true });
+assert.strictEqual(JSON.parse(globalThis.document.querySelector("#encHeader").value).alg, "HS256");
+assert.strictEqual(JSON.parse(globalThis.document.querySelector("#encPayload").value).sub, "a");
+assert.strictEqual(encKeyEl.value, "s3cr3t", "verified secret should carry over");
+api.loadIntoEncoder({ alg: "HS256" }, { sub: "b" }, "HS256", { secret: "a-string-secret-at-least-256-bits-long", verified: false });
+assert.strictEqual(encKeyEl.value, "", "an unverified/prefilled secret must NOT be carried into the encoder");
+api.loadIntoEncoder({ alg: "none" }, { sub: "c" }, "none", {});
+assert.strictEqual(encAlgEl.value, "none", "none should be selectable in the encoder");
+assert.ok(globalThis.document.querySelector("#encKeyState").textContent.includes("alg: none"));
+ok("decoder→encoder hands over header/payload and only a verified secret");
+
 console.log("\n" + pass + " checks passed");

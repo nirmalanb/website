@@ -47,6 +47,7 @@ import Footer from '../../components/Footer.astro';
             <div class="spacer"></div>
             <button class="btn ghost sm" id="btnExample">Generate example</button>
             <button class="btn ghost sm" id="btnClearToken">Clear</button>
+            <button class="btn ghost sm" id="btnDecodeToEncode">Edit in Encoder →</button>
           </div>
 
           <label class="fl" for="tokInput">Encoded Token</label>
@@ -62,6 +63,7 @@ import Footer from '../../components/Footer.astro';
           </div>
 
           <div class="status" style="margin-top:12px" id="statusRow"></div>
+          <div id="decMsg"></div>
         </div>
 
         <div class="card">
@@ -175,6 +177,9 @@ import Footer from '../../components/Footer.astro';
                   <option value="ES256">ES256</option>
                   <option value="ES384">ES384</option>
                   <option value="ES512">ES512</option>
+                </optgroup>
+                <optgroup label="Unsigned">
+                  <option value="none">none</option>
                 </optgroup>
               </select>
             </div>
@@ -588,6 +593,80 @@ import Footer from '../../components/Footer.astro';
     padding: 20px 14px;
     color: var(--jwt-dim);
     font-size: 13px;
+  }
+
+  /* collapsible JSON tree */
+  .jwt-tool .json-tree {
+    padding: 10px 14px;
+    max-height: 340px;
+    overflow: auto;
+    font-family: var(--jwt-mono);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .jwt-tool .json-tree .jt-line {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .jwt-tool .json-tree details {
+    margin: 0;
+  }
+
+  .jwt-tool .json-tree summary {
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .jwt-tool .json-tree summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .jwt-tool .json-tree summary::before {
+    content: '▸';
+    display: inline-block;
+    width: 1em;
+    margin-left: -1em;
+    color: var(--jwt-dim);
+  }
+
+  .jwt-tool .json-tree details[open] > summary::before {
+    content: '▾';
+  }
+
+  .jwt-tool .json-tree .jt-key {
+    color: var(--jwt-seg-payload);
+  }
+
+  .jwt-tool .json-tree .jt-idx {
+    color: var(--jwt-dim);
+  }
+
+  .jwt-tool .json-tree .jt-str {
+    color: var(--jwt-accent);
+  }
+
+  .jwt-tool .json-tree .jt-num {
+    color: var(--jwt-seg-sig);
+  }
+
+  .jwt-tool .json-tree .jt-bool {
+    color: var(--jwt-warn);
+  }
+
+  .jwt-tool .json-tree .jt-null {
+    color: var(--jwt-dim);
+  }
+
+  .jwt-tool .json-tree .jt-punct {
+    color: var(--jwt-muted);
+  }
+
+  .jwt-tool .json-tree .jt-count {
+    margin: 0 3px;
+    font-size: 11.5px;
+    color: var(--jwt-dim);
   }
 
   .jwt-tool table.claims {
