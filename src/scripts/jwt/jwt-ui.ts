@@ -9,7 +9,7 @@
  */
 
 const FIELD =
-  'w-full rounded-[10px] border border-rule bg-paper px-3 py-2 font-mono text-[13px] leading-relaxed text-body outline-none transition-colors focus:border-accent focus:ring-[3px] focus:ring-accent/15';
+  'w-full resize-y rounded-[10px] border border-rule bg-paper px-3 py-2 font-mono text-[13px] leading-relaxed text-body outline-none transition-colors focus:border-accent focus:ring-[3px] focus:ring-accent/15';
 
 const BTN =
   'cursor-pointer rounded-[10px] border-0 bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent/90';
@@ -28,8 +28,7 @@ export const CLS = {
   /* layout helpers */
   toolbar: 'mb-2.5 flex flex-wrap items-center gap-2',
   spacer: 'flex-1',
-  row: 'flex flex-wrap gap-3.5',
-  rowItem: 'min-w-[260px] flex-1 basis-0',
+  stack: 'flex flex-col gap-3.5',
   genrow: 'mt-2 flex flex-wrap items-center gap-2',
   fieldLabel:
     'mb-1.5 block text-xs font-semibold tracking-[0.03em] text-mute',
