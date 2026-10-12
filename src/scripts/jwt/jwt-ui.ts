@@ -9,7 +9,7 @@
  */
 
 const FIELD =
-  'w-full resize-y rounded-[10px] border border-rule bg-paper px-3 py-2 font-mono text-[13px] leading-relaxed text-body outline-none transition-colors focus:border-accent focus:ring-[3px] focus:ring-accent/15';
+  'w-full resize-y rounded-[10px] border border-rule bg-paper px-3 py-2 font-mono text-[13px] leading-relaxed text-body outline-none transition-colors aria-invalid:border-rose-600 focus:border-accent focus:ring-[3px] focus:ring-accent/15';
 
 const BTN =
   'cursor-pointer rounded-[10px] border-0 bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent/90';

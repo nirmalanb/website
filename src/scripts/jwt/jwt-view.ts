@@ -56,6 +56,27 @@ export function relTime(sec: number): string {
   return 'just now';
 }
 
+/** "Line L, column C: message" for invalid JSON, else null. Blank is not an error. */
+const ERR_POS = /\s*(?:in JSON )?at position (\d+)(?: \(line \d+ column \d+\))?/;
+const ERR_NOISE = /,\s*"[\s\S]*is not valid JSON$/;
+
+export function jsonError(src: string): string | null {
+  if (!src.trim()) return null;
+  let raw: string;
+  try {
+    JSON.parse(src);
+    return null;
+  } catch (e) {
+    raw = (e as Error).message;
+  }
+  const msg = raw.replace(ERR_NOISE, '').replace(ERR_POS, '').trim();
+  const hit = ERR_POS.exec(raw);
+  if (!hit) return msg;
+  const before = src.slice(0, Number(hit[1]));
+  const line = before.split('\n').length;
+  return 'Line ' + line + ', column ' + (Number(hit[1]) - before.lastIndexOf('\n')) + ': ' + msg;
+}
+
 /* ------------------------------------------------------------- JSON tree */
 
 function jtPrimitive(v: unknown): string {

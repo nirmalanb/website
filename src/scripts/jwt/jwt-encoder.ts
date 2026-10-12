@@ -8,7 +8,7 @@ import { $ } from 'domsure';
 import { CLS } from './jwt-ui.ts';
 import type { JsonObject, KeyInfo } from './jwt-crypto.ts';
 import { algInfo, derToPem, isPem, roundTripVerify, signJwt, strToB64url } from './jwt-crypto.ts';
-import { colorizeToken, esc } from './jwt-view.ts';
+import { colorizeToken, esc, jsonError } from './jwt-view.ts';
 
 const encHeader = $.required<HTMLTextAreaElement>('#encHeader');
 const encPayload = $.required<HTMLTextAreaElement>('#encPayload');
@@ -17,7 +17,25 @@ const encKey = $.required<HTMLTextAreaElement>('#encKey');
 const encPubKey = $.required<HTMLTextAreaElement>('#encPubKey');
 const encOut = $.required('#encOut');
 const encMsg = $.required('#encMsg');
+const encHeaderError = $.required('#encHeaderError');
+const encPayloadError = $.required('#encPayloadError');
 let lastSignedToken = '';
+
+/** Validate both JSON fields as they are typed. */
+function validateJsonFields(): void {
+  const pairs: [HTMLTextAreaElement, HTMLElement][] = [
+    [encHeader, encHeaderError],
+    [encPayload, encPayloadError],
+  ];
+  for (const [field, slot] of pairs) {
+    const err = jsonError(field.value);
+    slot.textContent = err ?? '';
+    if (err) field.setAttribute('aria-invalid', 'true');
+    else field.removeAttribute('aria-invalid');
+  }
+}
+encHeader.addEventListener('input', validateJsonFields);
+encPayload.addEventListener('input', validateJsonFields);
 
 const msgOk = (text: string) => '<div class="' + CLS.okmsg + '">' + text + '</div>';
 const msgErr = (text: string) => '<div class="' + CLS.err + '">' + text + '</div>';
@@ -101,6 +119,7 @@ export function loadIntoEncoder(header: JsonObject, payload: JsonObject, alg: st
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('The decoded payload is not a JSON object.');
   encHeader.value = JSON.stringify(header, null, 2);
   encPayload.value = JSON.stringify(payload, null, 2);
+  validateJsonFields();
   lastSignedToken = '';
   encOut.innerHTML = '—';
   encMsg.innerHTML = '';
@@ -145,6 +164,7 @@ encKeyLabelUpdate();
 $.required('#btnEncExample').addEventListener('click', () => {
   encHeader.value = JSON.stringify({ alg: encAlg.value, typ: 'JWT' }, null, 2);
   encPayload.value = JSON.stringify({ sub: '1234567890', name: 'John Doe', admin: true, iat: Math.floor(Date.now() / 1000) }, null, 2);
+  validateJsonFields();
 });
 
 $.required('#btnSign').addEventListener('click', async () => {

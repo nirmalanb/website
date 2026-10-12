@@ -38,6 +38,8 @@ function mkEl(sel) {
     focus(){},
     select(){},
     getAttribute(){ return null; },
+    setAttribute(){},
+    removeAttribute(){},
   };
   return el;
 }
@@ -232,6 +234,24 @@ assert.strictEqual(
 );
 assert.ok(claims.includes(CLS.claimsTh), "claims header cells must carry the header class");
 ok("claims breakdown builds a padded, bordered table");
+
+/* ------------------- 8c. JSON validity check --------------------------- */
+assert.strictEqual(api.jsonError('   '), null, "blank input is not an error");
+// Parity with JSON.parse, including unescaped control characters in strings.
+const validJson = ['{"a":1}', '[]', '{}', '[1,2,3]', 'true', 'null', '"x"', '-0.5e-3', '{"a":{"b":[1,{"c":true}]}}', '{"s":"a\\"b\\u00e9"}'];
+const badJsonSet = ['{', '{"a": }', '{"a":1,}', '[1,2,]', '{"a" 1}', '{"a":1', '{"a":"\\q"}', 'nul', '{"a":01}', '1 2', '"a\tb"', '"a\u0001b"', '"a\u001fb"'];
+for (const s of validJson) {
+  assert.strictEqual(api.jsonError(s), null, "should accept valid JSON: " + JSON.stringify(s));
+  assert.doesNotThrow(() => JSON.parse(s), "JSON.parse should accept: " + JSON.stringify(s));
+}
+for (const s of badJsonSet) {
+  assert.ok(api.jsonError(s) !== null, "should reject invalid JSON: " + JSON.stringify(s));
+  assert.throws(() => JSON.parse(s), "JSON.parse should reject: " + JSON.stringify(s));
+}
+const located = api.jsonError('{\n  "a" 1\n}');
+assert.ok(located && /Line 2, column 7/.test(located), "error must locate line/column: " + located);
+assert.ok(!located.includes('is not valid JSON'), "engine noise must be stripped: " + located);
+ok("jsonError matches JSON.parse and rewords its error");
 
 /* --------------- 9. decoder panes render the tree ----------------------- */
 const tokEl = globalThis.document.querySelector("#tokInput");

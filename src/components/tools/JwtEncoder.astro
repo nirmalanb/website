@@ -13,19 +13,29 @@ import { CLS } from '../../scripts/jwt/jwt-ui.ts';
     <div class={CLS.stack}>
       <div>
         <label class={CLS.fieldLabel} for="encHeader">Header: Algorithm &amp; Token Type</label>
-        <textarea id="encHeader" class={CLS.field + ' min-h-[150px]'} spellcheck="false">&#123;
+        <textarea
+          id="encHeader"
+          class={CLS.field + ' min-h-[150px]'}
+          spellcheck="false"
+          aria-describedby="encHeaderError">&#123;
   "alg": "HS256",
   "typ": "JWT"
 &#125;</textarea>
+        <p id="encHeaderError" class={CLS.err} role="status"></p>
       </div>
       <div>
         <label class={CLS.fieldLabel} for="encPayload">Payload: Data</label>
-        <textarea id="encPayload" class={CLS.field + ' min-h-[150px]'} spellcheck="false">&#123;
+        <textarea
+          id="encPayload"
+          class={CLS.field + ' min-h-[150px]'}
+          spellcheck="false"
+          aria-describedby="encPayloadError">&#123;
   "sub": "1234567890",
   "name": "John Doe",
   "admin": true,
   "iat": 1516239022
 &#125;</textarea>
+        <p id="encPayloadError" class={CLS.err} role="status"></p>
       </div>
     </div>
   </div>
