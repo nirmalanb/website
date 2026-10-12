@@ -1,21 +1,40 @@
 (function(){
 "use strict";
 
+/* ---------------------------------------------------------------- types */
+type JsonObject = Record<string, unknown>;
+/** Algorithm descriptor handed to Web Crypto; `usages` is consumed by keyParams callers. */
+type KeyParams = { name: string; hash?: string; namedCurve?: string; saltLength?: number; usages?: KeyUsage[] };
+type KeyInfo = { secret?: string; verified?: boolean };
+interface JwtState {
+  raw: string;
+  parts: string[];
+  header: JsonObject | null;
+  payload: JsonObject | null;
+  headerRaw: string;
+  payloadRaw: string;
+  sigRaw: string;
+  headerErr: string | null;
+  payloadErr: string | null;
+  alg: string | null;
+  verifiedKey: string | null;
+}
+
 /* ---------------------------------------------------------------- utils */
-const $ = (s) => document.querySelector(s);
+const $ = <T extends HTMLElement = HTMLElement>(s: string): T => document.querySelector(s) as T;
 const textEnc = new TextEncoder();
 const textDec = new TextDecoder();
 
-function esc(s){
+function esc(s: unknown): string {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
-function bytesToB64url(bytes){
+function bytesToB64url(bytes: Uint8Array): string {
   let bin = "";
   for (let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
   return btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 }
-function strToB64url(str){ return bytesToB64url(textEnc.encode(str)); }
-function b64urlToBytes(seg){
+function strToB64url(str: string): string { return bytesToB64url(textEnc.encode(str)); }
+function b64urlToBytes(seg: string): Uint8Array<ArrayBuffer> {
   let s = String(seg).replace(/-/g,"+").replace(/_/g,"/").replace(/\s+/g,"");
   while (s.length % 4) s += "=";
   const bin = atob(s);
@@ -23,50 +42,50 @@ function b64urlToBytes(seg){
   for (let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
   return out;
 }
-function b64urlToString(seg){ return textDec.decode(b64urlToBytes(seg)); }
+function b64urlToString(seg: string): string { return textDec.decode(b64urlToBytes(seg)); }
 // Strict decode with a human-readable failure (JWS segments are unpadded base64url).
 const B64URL_RE = /^[A-Za-z0-9_-]+={0,2}$/;
-function decodeSegment(seg, what){
+function decodeSegment(seg: string, what: string): string {
   const s = String(seg).replace(/\s+/g, "");
   if (!B64URL_RE.test(s)) throw new Error(what + " is not valid base64url (unexpected characters).");
   try { return b64urlToString(s); }
   catch(e){ throw new Error(what + " could not be base64url-decoded."); }
 }
-function decodeSigBytes(seg){
+function decodeSigBytes(seg: string): Uint8Array<ArrayBuffer> {
   const s = String(seg).replace(/\s+/g, "").replace(/=+$/, "");
   if (!B64URL_RE.test(s + "=")) throw new Error("Signature is not valid base64url (unexpected characters).");
   try { return b64urlToBytes(s); }
   catch(e){ throw new Error("Signature could not be base64url-decoded."); }
 }
 
-function pemToDer(pem){
+function pemToDer(pem: string): ArrayBuffer {
   const body = String(pem).replace(/-----BEGIN [^-]+-----/g,"")
                          .replace(/-----END [^-]+-----/g,"")
                          .replace(/\s+/g,"");
   if (!body) throw new Error("Empty PEM key.");
   const bytes = b64urlToBytes(body.replace(/\+/g,"-").replace(/\//g,"_"));
-  return bytes.buffer;
+  return bytes.buffer as ArrayBuffer;
 }
-function derToPem(buffer, label){
+function derToPem(buffer: ArrayBuffer, label: string): string {
   const bytes = new Uint8Array(buffer);
   let bin = "";
   for (let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
   const b64 = btoa(bin).replace(/(.{64})/g,"$1\n").replace(/\n$/,"");
   return "-----BEGIN " + label + "-----\n" + b64 + "\n-----END " + label + "-----";
 }
-function hashFor(alg){
+function hashFor(alg: string): string {
   if (/256$/.test(alg)) return "SHA-256";
   if (/384$/.test(alg)) return "SHA-384";
   if (/512$/.test(alg)) return "SHA-512";
   throw new Error("Unsupported algorithm: " + alg);
 }
-function curveFor(alg){
+function curveFor(alg: string): string {
   if (alg === "ES256") return "P-256";
   if (alg === "ES384") return "P-384";
   if (alg === "ES512") return "P-521";
   throw new Error("Unsupported curve for " + alg);
 }
-function keyParams(alg, usages){
+function keyParams(alg: string, usages: KeyUsage[]): KeyParams {
   const hash = hashFor(alg);
   if (alg.startsWith("HS")) return { name:"HMAC", hash, usages };
   if (alg.startsWith("RS")) return { name:"RSASSA-PKCS1-v1_5", hash, usages };
@@ -74,9 +93,9 @@ function keyParams(alg, usages){
   if (alg.startsWith("ES")) return { name:"ECDSA", namedCurve:curveFor(alg), usages };
   throw new Error("Unsupported algorithm: " + alg);
 }
-function isPem(s){ return /-----BEGIN/.test(s); }
+function isPem(s: string): boolean { return /-----BEGIN/.test(s); }
 
-async function importVerifyKey(alg, keyText){
+async function importVerifyKey(alg: string, keyText: string): Promise<CryptoKey> {
   const hash = hashFor(alg);
   if (alg.startsWith("HS")) {
     return crypto.subtle.importKey("raw", textEnc.encode(keyText), { name:"HMAC", hash }, false, ["verify"]);
@@ -86,7 +105,7 @@ async function importVerifyKey(alg, keyText){
   if (alg.startsWith("PS")) return crypto.subtle.importKey("spki", der, { name:"RSA-PSS", hash }, false, ["verify"]);
   return crypto.subtle.importKey("spki", der, { name:"ECDSA", namedCurve:curveFor(alg) }, false, ["verify"]);
 }
-async function importSignKey(alg, keyText){
+async function importSignKey(alg: string, keyText: string): Promise<CryptoKey> {
   const hash = hashFor(alg);
   if (alg.startsWith("HS")) {
     return crypto.subtle.importKey("raw", textEnc.encode(keyText), { name:"HMAC", hash }, false, ["sign"]);
@@ -96,13 +115,13 @@ async function importSignKey(alg, keyText){
   if (alg.startsWith("PS")) return crypto.subtle.importKey("pkcs8", der, { name:"RSA-PSS", hash }, false, ["sign"]);
   return crypto.subtle.importKey("pkcs8", der, { name:"ECDSA", namedCurve:curveFor(alg) }, false, ["sign"]);
 }
-function verifyParams(alg){
+function verifyParams(alg: string): AlgorithmIdentifier | RsaPssParams | EcdsaParams {
   if (alg.startsWith("HS")) return { name:"HMAC" };
   if (alg.startsWith("RS")) return { name:"RSASSA-PKCS1-v1_5" };
   if (alg.startsWith("PS")) return { name:"RSA-PSS", saltLength: parseInt(alg.slice(2),10)/8 };
   return { name:"ECDSA", hash: hashFor(alg) };
 }
-function signParams(alg){
+function signParams(alg: string): AlgorithmIdentifier | RsaPssParams | EcdsaParams {
   if (alg.startsWith("HS")) return { name:"HMAC" };
   if (alg.startsWith("RS")) return { name:"RSASSA-PKCS1-v1_5" };
   if (alg.startsWith("PS")) return { name:"RSA-PSS", saltLength: parseInt(alg.slice(2),10)/8 };
@@ -110,7 +129,7 @@ function signParams(alg){
 }
 
 /* ------------------------------------------------------- claim metadata */
-const CLAIM_DOCS = {
+const CLAIM_DOCS: Record<string, { d: string; fmt?: string }> = {
   iss:{ d:"Issuer — who created and signed this token", fmt:"text" },
   sub:{ d:"Subject — whom the token refers to", fmt:"text" },
   aud:{ d:"Audience — intended recipient(s) of the token", fmt:"text" },
@@ -128,23 +147,24 @@ const CLAIM_DOCS = {
   kid:{ d:"Key ID — hints which key was used to sign", fmt:"text" },
   admin:{ d:"Custom claim — application specific", fmt:"text" }
 };
-function fmtDate(sec){
+function fmtDate(sec: number): string {
   const d = new Date(sec*1000);
   if (isNaN(d.getTime())) return String(sec);
   return d.toUTCString();
 }
-function relTime(sec){
+function relTime(sec: number): string {
   const diff = Date.now() - sec*1000;
   const abs = Math.abs(diff);
-  const units = [["year",31536e6],["month",2592e6],["day",864e5],["hour",36e5],["minute",6e4],["second",1000]];
+  const units: [string, number][] = [["year",31536e6],["month",2592e6],["day",864e5],["hour",36e5],["minute",6e4],["second",1000]];
   for (const [u,ms] of units){
     if (abs >= ms || u === "second"){
       const n = Math.max(1, Math.floor(abs/ms));
       return n + " " + u + (n>1?"s":"");
     }
   }
+  return "just now";
 }
-function jtPrimitive(v){
+function jtPrimitive(v: unknown): string {
   if (v === null) return '<span class="jt-null">null</span>';
   const t = typeof v;
   if (t === "number") return '<span class="jt-num">' + esc(String(v)) + '</span>';
@@ -152,13 +172,13 @@ function jtPrimitive(v){
   if (t === "string") return '<span class="jt-str">' + esc(JSON.stringify(v)) + '</span>';
   return '<span class="jt-null">' + esc(String(v)) + '</span>';
 }
-function jtKey(key, isIndex){
+function jtKey(key: string | null, isIndex: boolean): string {
   if (key === null) return "";
   return isIndex
     ? '<span class="jt-idx">' + esc(key) + '</span><span class="jt-punct">: </span>'
     : '<span class="jt-key">' + esc(JSON.stringify(key)) + '</span><span class="jt-punct">: </span>';
 }
-function jtNode(value, key, depth, isIndex){
+function jtNode(value: unknown, key: string | null, depth: number, isIndex: boolean): string {
   const pad = "padding-left:" + depth * 14 + "px";
   const head = jtKey(key, isIndex);
   if (value !== null && typeof value === "object"){
@@ -179,20 +199,20 @@ function jtNode(value, key, depth, isIndex){
 }
 // Collapsible, syntax-coloured JSON view. Every string goes through esc(JSON.stringify(...))
 // so a malicious claim can never inject markup.
-function jsonTreeView(obj){
+function jsonTreeView(obj: unknown): string {
   return '<div class="json-tree">' + jtNode(obj, null, 0, false) + '</div>';
 }
-function jsonPane(obj){
+function jsonPane(obj: unknown): string {
   return jsonTreeView(obj);
 }
 // Cache the rendered key on the pane so identical re-renders are skipped — that keeps a
 // user's collapsed/expanded <details> state across keystroke-by-keystroke decoding.
-function setPaneHtml(body, key, html){
+function setPaneHtml(body: HTMLElement, key: string, html: string): void {
   if (body.dataset && body.dataset.jwtKey === key) return;
   if (body.dataset) body.dataset.jwtKey = key;
   body.innerHTML = html;
 }
-function claimsPane(obj, headerMode){
+function claimsPane(obj: JsonObject, headerMode: boolean): string {
   const keys = Object.keys(obj||{});
   if (!keys.length) return '<div class="empty">No claims.</div>';
   let rows = '<table class="claims"><thead><tr><th>Claim</th><th>Value</th><th>Description</th></tr></thead><tbody>';
@@ -211,17 +231,17 @@ function claimsPane(obj, headerMode){
 }
 
 /* ------------------------------------------------------------- decoder */
-const tokInput = $("#tokInput");
+const tokInput = $<HTMLTextAreaElement>("#tokInput");
 const tokBack = $("#tokBack");
 const statusRow = $("#statusRow");
 const headerBody = $("#headerBody");
 const payloadBody = $("#payloadBody");
-const secretInput = $("#secretInput");
+const secretInput = $<HTMLTextAreaElement>("#secretInput");
 
-let state = { raw:"", parts:[], header:null, payload:null, headerRaw:"", payloadRaw:"", sigRaw:"", headerErr:null, payloadErr:null, alg:null, verifiedKey:null };
+let state: JwtState = { raw:"", parts:[], header:null, payload:null, headerRaw:"", payloadRaw:"", sigRaw:"", headerErr:null, payloadErr:null, alg:null, verifiedKey:null };
 let verifyToken = 0;
 
-function colorizeToken(raw){
+function colorizeToken(raw: string): string {
   // Split keeping dots; color each base64url segment.
   let out = "";
   const segs = raw.split(".");
@@ -238,7 +258,7 @@ function syncScroll(){
 }
 function renderTokenLayer(){ tokBack.innerHTML = colorizeToken(tokInput.value.trim()); syncScroll(); }
 
-function badge(kind, text){
+function badge(kind: string, text: string): string {
   return '<span class="badge ' + kind + '"><span class="dotm"></span>' + esc(text) + "</span>";
 }
 
@@ -268,7 +288,7 @@ function decodeToken(){
       const txt = decodeSegment(state.parts[0], "Header");
       state.header = JSON.parse(txt);
       setPaneHtml(headerBody, "json:" + JSON.stringify(state.header), jsonPane(state.header));
-    } catch(e){ state.headerErr = e.message; }
+    } catch(e){ state.headerErr = (e as Error).message; }
   }
   // payload
   if (state.parts.length >= 3 && state.parts[1]){
@@ -276,7 +296,7 @@ function decodeToken(){
       const txt = decodeSegment(state.parts[1], "Payload");
       state.payload = JSON.parse(txt);
       setPaneHtml(payloadBody, "json:" + JSON.stringify(state.payload), jsonPane(state.payload));
-    } catch(e){ state.payloadErr = e.message; }
+    } catch(e){ state.payloadErr = (e as Error).message; }
   }
   if (state.headerErr) setPaneHtml(headerBody, "err:header:" + state.headerErr, '<div class="empty">Could not decode header: ' + esc(state.headerErr) + "</div>");
   if (state.payloadErr) setPaneHtml(payloadBody, "err:payload:" + state.payloadErr, '<div class="empty">Could not decode payload: ' + esc(state.payloadErr) + "</div>");
@@ -289,7 +309,7 @@ function decodeToken(){
   scheduleVerify();
 }
 
-function setSecretLabel(alg){
+function setSecretLabel(alg: string | null): void {
   const label = $("#secretLabel");
   if (!alg){ label.textContent = "Secret"; return; }
   if (alg === "none"){ label.textContent = "No key needed (alg: none, unsigned)"; return; }
@@ -347,7 +367,7 @@ function scheduleVerify(){
   runVerify(id, key, state.raw, state.alg);
 }
 
-async function runVerify(id, key, raw, alg){
+async function runVerify(id: number, key: string, raw: string, alg: string): Promise<void> {
   const slot = () => $("#sigBadge");
   try {
     const parts = raw.split(".");
@@ -355,7 +375,7 @@ async function runVerify(id, key, raw, alg){
     const sigBytes = decodeSigBytes(parts[2]);
     let k;
     try { k = await importVerifyKey(alg, key); }
-    catch(e){ throw new Error("Could not load the " + (alg.startsWith("HS") ? "secret" : "PEM public key") + ": " + e.message); }
+    catch(e){ throw new Error("Could not load the " + (alg.startsWith("HS") ? "secret" : "PEM public key") + ": " + (e as Error).message); }
     const ok = await crypto.subtle.verify(verifyParams(alg), k, sigBytes, data);
     if (id !== verifyToken) return;
     state.verifiedKey = ok ? key : null;
@@ -369,17 +389,18 @@ async function runVerify(id, key, raw, alg){
     state.verifiedKey = null;
     const el = slot();
     // A malformed signature segment is a definite failure, not an "error".
-    const malformed = /not valid base64url|could not be base64url-decoded/i.test(err.message);
+    const malformed = /not valid base64url|could not be base64url-decoded/i.test((err as Error).message);
     if (el) el.innerHTML = malformed
-      ? badge("bad", err.message)
-      : badge("warn", "Verification error — " + err.message);
-    $("#secretState").innerHTML = '<span style="color:var(--warn)">' + esc(err.message) + "</span>";
+      ? badge("bad", (err as Error).message)
+      : badge("warn", "Verification error — " + (err as Error).message);
+    $("#secretState").innerHTML = '<span style="color:var(--warn)">' + esc((err as Error).message) + "</span>";
   }
 }
 
-function refreshClaimsView(which){
+function refreshClaimsView(which: string): void {
   const pane = document.querySelector('.segtab[data-pane="' + which + '"]');
-  const view = pane ? pane.querySelector("button.active").dataset.view : "json";
+  const active = pane ? (pane.querySelector("button.active") as HTMLElement | null) : null;
+  const view = active ? active.dataset.view : "json";
   const obj = which === "header" ? state.header : state.payload;
   const body = which === "header" ? headerBody : payloadBody;
   if (!obj) return;
@@ -390,7 +411,7 @@ function refreshClaimsView(which){
 /* ------------------------------------------------- decoder wiring */
 tokInput.addEventListener("input", ()=>{ renderTokenLayer(); decodeToken(); });
 tokInput.addEventListener("scroll", syncScroll);
-tokInput.addEventListener("keydown", (e)=>{
+tokInput.addEventListener("keydown", (e: KeyboardEvent)=>{
   if (e.key === "Tab"){
     e.preventDefault();
     const s = tokInput.selectionStart, end = tokInput.selectionEnd;
@@ -402,10 +423,10 @@ tokInput.addEventListener("keydown", (e)=>{
 secretInput.addEventListener("input", ()=>{ $("#secretState").textContent = ""; scheduleVerify(); });
 
 document.querySelectorAll(".segtab").forEach(tab=>{
-  tab.addEventListener("click",(e)=>{
-    const btn = e.target.closest("button"); if (!btn) return;
+  tab.addEventListener("click",(e: Event)=>{
+    const btn = (e.target as Element).closest("button"); if (!btn) return;
     tab.querySelectorAll("button").forEach(x=>x.classList.toggle("active", x===btn));
-    refreshClaimsView(tab.dataset.pane);
+    refreshClaimsView((tab as HTMLElement).dataset.pane as string);
   });
 });
 
@@ -435,15 +456,15 @@ $("#btnDecodeToEncode").addEventListener("click", ()=>{
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
     window.scrollTo({ top: 0, behavior: reduce ? "smooth" : "auto" });
   } catch(e){
-    $("#decMsg").innerHTML = '<span class="err">' + esc(e.message) + "</span>";
+    $("#decMsg").innerHTML = '<span class="err">' + esc((e as Error).message) + "</span>";
   }
 });
 
 /* ------------------------------------------------------------- encoder */
-const encHeader = $("#encHeader");
-const encPayload = $("#encPayload");
-const encAlg = $("#encAlg");
-const encKey = $("#encKey");
+const encHeader = $<HTMLTextAreaElement>("#encHeader");
+const encPayload = $<HTMLTextAreaElement>("#encPayload");
+const encAlg = $<HTMLSelectElement>("#encAlg");
+const encKey = $<HTMLTextAreaElement>("#encKey");
 const encOut = $("#encOut");
 const encMsg = $("#encMsg");
 let lastSignedToken = "";
@@ -483,9 +504,9 @@ async function signToken(){
   const alg = encAlg.value || "HS256";
   let header, payload;
   try { header = JSON.parse(encHeader.value); }
-  catch(e){ throw new Error("Header is not valid JSON: " + e.message); }
+  catch(e){ throw new Error("Header is not valid JSON: " + (e as Error).message); }
   try { payload = JSON.parse(encPayload.value); }
-  catch(e){ throw new Error("Payload is not valid JSON: " + e.message); }
+  catch(e){ throw new Error("Payload is not valid JSON: " + (e as Error).message); }
   if (!header || typeof header !== "object" || Array.isArray(header)) throw new Error("Header must be a JSON object.");
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Payload must be a JSON object.");
 
@@ -522,27 +543,27 @@ $("#btnSign").addEventListener("click", async ()=>{
     const t = await signToken();
     encMsg.innerHTML = '<div class="okmsg">Token signed with ' + esc(encAlg.value) + ". Use “Copy” or paste it into the Decoder tab.</div>";
   } catch(e){
-    encMsg.innerHTML = '<div class="err">' + esc(e.message) + "</div>";
+    encMsg.innerHTML = '<div class="err">' + esc((e as Error).message) + "</div>";
   }
 });
 
 // Derive the public key from a private PEM via JWK, then verify a token we produced.
-async function publicKeyFromPrivatePem(alg, privPem){
+async function publicKeyFromPrivatePem(alg: string, privPem: string): Promise<string> {
   const jwk = await crypto.subtle.exportKey("jwk", await crypto.subtle.importKey("pkcs8", pemToDer(privPem), keyParams(alg,["sign"]), true, ["sign"]));
-  for (const k of ["d","dp","dq","q","qi","p"]) delete jwk[k];
+  for (const k of ["d","dp","dq","q","qi","p"]) delete (jwk as Record<string, unknown>)[k];
   jwk.key_ops = ["verify"];
   const pub = await crypto.subtle.importKey("jwk", jwk, keyParams(alg,["verify"]), true, ["verify"]);
   return derToPem(await crypto.subtle.exportKey("spki", pub), "PUBLIC KEY");
 }
 
-async function verifyTokenWithKey(token, alg, keyText){
+async function verifyTokenWithKey(token: string, alg: string, keyText: string): Promise<boolean> {
   const p = String(token).split(".");
   if (p.length !== 3) throw new Error("Not a three-part JWT.");
   const k = await importVerifyKey(alg, keyText);
   return crypto.subtle.verify(verifyParams(alg), k, b64urlToBytes(p[2]), textEnc.encode(p[0] + "." + p[1]));
 }
 
-async function roundTripVerify(token, alg, keyText){
+async function roundTripVerify(token: string, alg: string, keyText: string): Promise<boolean> {
   const verifyKey = alg.startsWith("HS") ? keyText : await publicKeyFromPrivatePem(alg, keyText);
   return verifyTokenWithKey(token, alg, verifyKey);
 }
@@ -561,12 +582,12 @@ $("#btnVerifyOwn").addEventListener("click", async ()=>{
       ? '<div class="okmsg">Round-trip OK — ' + (alg.startsWith("HS") ? "the secret" : "a public key derived from your private key") + " verifies this token.</div>"
       : '<div class="err">Round-trip FAILED — signature did not verify.</div>';
   } catch(e){
-    encMsg.innerHTML = '<div class="err">' + esc(e.message) + "</div>";
+    encMsg.innerHTML = '<div class="err">' + esc((e as Error).message) + "</div>";
   }
 });
 
 $("#btnCopyPub").addEventListener("click", async ()=>{
-  const v = $("#encPubKey").value;
+  const v = $<HTMLTextAreaElement>("#encPubKey").value;
   if (!v){ encMsg.innerHTML = '<div class="err">No public key yet — generate a key pair first.</div>'; return; }
   try { await navigator.clipboard.writeText(v); } catch(e){}
   const b = $("#btnCopyPub"), old = b.textContent;
@@ -580,7 +601,7 @@ $("#btnSendDecode").addEventListener("click", async ()=>{
     const alg = encAlg.value || "HS256";
     let token = lastSignedToken;
     if (!token || !token.startsWith(hdrB64())) token = await signToken();
-    const key = alg.startsWith("HS") ? encKey.value.trim() : $("#encPubKey").value;
+    const key = alg.startsWith("HS") ? encKey.value.trim() : $<HTMLTextAreaElement>("#encPubKey").value;
     setTab("decode");
     tokInput.value = token;
     renderTokenLayer();
@@ -592,7 +613,7 @@ $("#btnSendDecode").addEventListener("click", async ()=>{
     const reduce = window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
     window.scrollTo({ top: 0, behavior: reduce ? "smooth" : "auto" });
   } catch(e){
-    encMsg.innerHTML = '<div class="err">' + esc(e.message) + "</div>";
+    encMsg.innerHTML = '<div class="err">' + esc((e as Error).message) + "</div>";
   }
 });
 
@@ -618,7 +639,8 @@ $("#btnGenKeys").addEventListener("click", async ()=>{
   encMsg.innerHTML = "";
   const alg = encAlg.value;
   try {
-    let genParams, usages = ["sign","verify"];
+    let genParams: RsaHashedKeyGenParams | EcKeyGenParams;
+    const usages: KeyUsage[] = ["sign","verify"];
     if (alg.startsWith("RS")) genParams = { name:"RSASSA-PKCS1-v1_5", modulusLength:2048, publicExponent:new Uint8Array([1,0,1]), hash:hashFor(alg) };
     else if (alg.startsWith("PS")) genParams = { name:"RSA-PSS", modulusLength:2048, publicExponent:new Uint8Array([1,0,1]), hash:hashFor(alg) };
     else genParams = { name:"ECDSA", namedCurve:curveFor(alg) };
@@ -626,16 +648,16 @@ $("#btnGenKeys").addEventListener("click", async ()=>{
     const priv = derToPem(await crypto.subtle.exportKey("pkcs8", kp.privateKey), "PRIVATE KEY");
     const pub = derToPem(await crypto.subtle.exportKey("spki", kp.publicKey), "PUBLIC KEY");
     encKey.value = priv;
-    $("#encPubKey").value = pub;
+    $<HTMLTextAreaElement>("#encPubKey").value = pub;
     $("#pubKeyWrap").classList.remove("hidden");
     encMsg.innerHTML = '<div class="okmsg">Key pair generated (' + esc(alg.startsWith("ES") ? curveFor(alg) : "2048-bit RSA") + "). Private key above, public key below.</div>";
-    window.__generatedPublicKey = pub;
-  } catch(e){ encMsg.innerHTML = '<div class="err">' + esc(e.message) + "</div>"; }
+    (window as unknown as Record<string, unknown>).__generatedPublicKey = pub;
+  } catch(e){ encMsg.innerHTML = '<div class="err">' + esc((e as Error).message) + "</div>"; }
 });
 
 // Populate the Encoder from a decoded token. Pure state change so it is testable without
 // a DOM click; the caller switches tabs. Callers pass { secret, verified }.
-function loadIntoEncoder(header, payload, alg, keyInfo){
+function loadIntoEncoder(header: JsonObject, payload: JsonObject, alg: string | null, keyInfo?: KeyInfo): void {
   if (!header || typeof header !== "object" || Array.isArray(header)) throw new Error("Nothing to send — paste a decodable token first.");
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("The decoded payload is not a JSON object.");
   encHeader.value = JSON.stringify(header, null, 2);
@@ -674,7 +696,7 @@ function loadIntoEncoder(header, payload, alg, keyInfo){
 /* --------------------------------------------------------------- tabs */
 $("#tabDecode").addEventListener("click", ()=>{ setTab("decode"); });
 $("#tabEncode").addEventListener("click", ()=>{ setTab("encode"); });
-function setTab(which){
+function setTab(which: string): void {
   const isDecode = which === "decode";
   const dec = $("#tabDecode"), enc = $("#tabEncode");
   dec.classList.toggle("active", isDecode);
@@ -695,5 +717,5 @@ renderTokenLayer();
 decodeToken();
 
 // expose a tiny hook for automated tests
-window.__jwtDebugger = { b64urlToBytes, strToB64url, pemToDer, derToPem, importVerifyKey, importSignKey, signToken, decodeToken, verifyTokenWithKey, roundTripVerify, publicKeyFromPrivatePem, decodeSegment, jsonTreeView, loadIntoEncoder };
+(window as unknown as { __jwtDebugger: Record<string, unknown> }).__jwtDebugger = { b64urlToBytes, strToB64url, pemToDer, derToPem, importVerifyKey, importSignKey, signToken, decodeToken, verifyTokenWithKey, roundTripVerify, publicKeyFromPrivatePem, decodeSegment, jsonTreeView, loadIntoEncoder };
 })();

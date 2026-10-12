@@ -1,4 +1,4 @@
-// Runs the shipped JWT tool script (src/scripts/jwt-decoder.js) under a minimal DOM
+// Runs the shipped JWT tool script (src/scripts/jwt-decoder.ts) under a minimal DOM
 // shim, round-trips HS/RS/PS/ES, and cross-checks signatures with node:crypto.
 //
 // The script is a side-effect-only IIFE exposing window.__jwtDebugger, so it is imported
@@ -54,7 +54,7 @@ try { globalThis.navigator = { clipboard: { writeText: async () => {} } }; }
 catch { Object.defineProperty(globalThis, "navigator", { value: { clipboard: { writeText: async () => {} } }, configurable: true }); }
 
 // Execute the shipped script now that the DOM shim exists.
-await import("../src/scripts/jwt-decoder.js");
+await import("../src/scripts/jwt-decoder.ts");
 
 const api = globalThis.__jwtDebugger;
 assert(api, "__jwtDebugger hook missing");
@@ -165,7 +165,7 @@ ok("prefilled demo token verifies with the prefilled secret in the UI");
 // The app is injected via innerHTML for badges/claims/panes; every id the script looks
 // up from the static markup must exist in the .astro page, or the tool silently no-ops.
 const astro = fs.readFileSync(new URL("../src/pages/tools/jwt-decoder.astro", import.meta.url), "utf8");
-const script = fs.readFileSync(new URL("../src/scripts/jwt-decoder.js", import.meta.url), "utf8");
+const script = fs.readFileSync(new URL("../src/scripts/jwt-decoder.ts", import.meta.url), "utf8");
 const staticIds = new Set([...astro.matchAll(/\bid="([^"]+)"/g)].map((x) => x[1]));
 const referenced = new Set([...script.matchAll(/\$\("#([A-Za-z0-9_-]+)"\)/g)].map((x) => x[1]));
 // sigBadge is created at runtime inside #statusRow, so it is legitimately absent.
