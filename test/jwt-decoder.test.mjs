@@ -221,6 +221,18 @@ assert.strictEqual(tree.includes("style="), false, "generated tree must not use 
 assert.strictEqual(tree.includes("var(--"), false, "generated tree must not use custom CSS vars");
 ok("JSON tree viewer escapes input, colours types and collapses objects");
 
+/* ------------------- 8b. claims breakdown ------------------------------ */
+const claims = api.claimsPane({ sub: "1234567890", iat: 1516239022 }, false);
+const tdCount = (claims.match(/<td /g) ?? []).length;
+assert.strictEqual(tdCount, 6, "two claims should render six cells (3 columns each)");
+assert.strictEqual(
+  claims.split(CLS.claimsTd).length - 1,
+  tdCount,
+  "every claims cell must carry the shared cell class (padding/border/align)",
+);
+assert.ok(claims.includes(CLS.claimsTh), "claims header cells must carry the header class");
+ok("claims breakdown builds a padded, bordered table");
+
 /* --------------- 9. decoder panes render the tree ----------------------- */
 const tokEl = globalThis.document.querySelector("#tokInput");
 const statusEl = globalThis.document.querySelector("#statusRow");

@@ -132,9 +132,9 @@ export function claimsPane(obj: JsonObject, headerMode: boolean): string {
       val = fmtDate(v) + '  (' + v + ')';
       desc += ' — ' + relTime(v) + (k === 'exp' ? ' from now' : ' ago');
     }
-    rows += '<tr><td class="' + CLS.claimsK + '">' + esc(k)
-      + '</td><td class="' + CLS.claimsV + '">' + esc(val)
-      + '</td><td class="' + CLS.claimsD + '">' + esc(desc) + '</td></tr>';
+    rows += '<tr><td class="' + CLS.claimsTd + ' ' + CLS.claimsK + '">' + esc(k)
+      + '</td><td class="' + CLS.claimsTd + ' ' + CLS.claimsV + '">' + esc(val)
+      + '</td><td class="' + CLS.claimsTd + ' ' + CLS.claimsD + '">' + esc(desc) + '</td></tr>';
   }
   return '<div class="' + CLS.claimsWrap + '">' + rows + '</tbody></table></div>';
 }
