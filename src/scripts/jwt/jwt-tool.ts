@@ -1,24 +1,13 @@
 /**
  * Entry point: tab switching, the two cross-panel buttons (Decoder → Encoder and
- * Encoder → Decoder), boot, and the test hook. Panels own their own DOM.
+ * Encoder → Decoder), and boot. Panels own their own DOM.
  */
 
 import { $ } from 'domsure';
 import { CLS } from './jwt-ui.ts';
-import { esc, jsonTreeView } from './jwt-view.ts';
-import {
-  b64urlToBytes,
-  decodeSegment,
-  derToPem,
-  importKey,
-  pemToDer,
-  publicKeyFromPrivatePem,
-  roundTripVerify,
-  strToB64url,
-  verifyTokenWithKey,
-} from './jwt-crypto.ts';
+import { esc } from './jwt-view.ts';
 import { boot, decodeToken, loadToken, snapshot } from './jwt-decoder.ts';
-import { encoderKeyForDecode, loadIntoEncoder, signToken, tokenForHandoff } from './jwt-encoder.ts';
+import { encoderKeyForDecode, loadIntoEncoder, tokenForHandoff } from './jwt-encoder.ts';
 
 function scrollTop(): void {
   const reduce = window.matchMedia('(prefers-reduced-motion: no-preference)').matches;
@@ -73,20 +62,3 @@ $.required('#btnSendDecode').addEventListener('click', async () => {
 });
 
 boot();
-
-// exposed for automated tests
-(window as unknown as { __jwtDebugger: Record<string, unknown> }).__jwtDebugger = {
-  b64urlToBytes,
-  strToB64url,
-  pemToDer,
-  derToPem,
-  importKey,
-  signToken,
-  decodeToken,
-  verifyTokenWithKey,
-  roundTripVerify,
-  publicKeyFromPrivatePem,
-  decodeSegment,
-  jsonTreeView,
-  loadIntoEncoder,
-};

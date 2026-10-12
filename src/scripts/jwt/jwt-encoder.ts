@@ -236,7 +236,6 @@ $.required('#btnGenKeys').addEventListener('click', async () => {
     encPubKey.value = derToPem(pub, 'PUBLIC KEY');
     $.required('#pubKeyWrap').classList.remove('hidden');
     encMsg.innerHTML = msgOk('Key pair generated (' + esc(alg.startsWith('ES') ? info.curve! : '2048-bit RSA') + '). Private key above, public key below.');
-    (window as unknown as Record<string, unknown>).__generatedPublicKey = encPubKey.value;
   } catch (e) {
     encMsg.innerHTML = msgErr(esc((e as Error).message));
   }

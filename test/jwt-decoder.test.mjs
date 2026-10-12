@@ -1,8 +1,9 @@
-// Runs the shipped JWT tool script (src/scripts/jwt-decoder.ts) under a minimal DOM
-// shim, round-trips HS/RS/PS/ES, and cross-checks signatures with node:crypto.
+// Runs the JWT tool modules (src/scripts/jwt/) under a minimal DOM shim, round-trips
+// HS/RS/PS/ES, and cross-checks signatures with node:crypto.
 //
-// The script is a side-effect-only IIFE exposing window.__jwtDebugger, so it is imported
-// dynamically *after* the shim is installed (static imports would hoist above the shim).
+// Everything is imported dynamically *after* the shim is installed (static imports would
+// hoist above it): the entry for its boot + wiring side effects, then the individual
+// modules for the functions under test — no window hook required.
 import fs from "node:fs";
 import crypto from "node:crypto";
 import assert from "node:assert";
@@ -55,11 +56,14 @@ globalThis.atob = (s) => Buffer.from(s, "base64").toString("latin1");
 try { globalThis.navigator = { clipboard: { writeText: async () => {} } }; }
 catch { Object.defineProperty(globalThis, "navigator", { value: { clipboard: { writeText: async () => {} } }, configurable: true }); }
 
-// Execute the shipped script now that the DOM shim exists.
+// Execute the tool now that the DOM shim exists, then collect the modules under test.
 await import("../src/scripts/jwt/jwt-tool.ts");
-
-const api = globalThis.__jwtDebugger;
-assert(api, "__jwtDebugger hook missing");
+const api = {
+  ...(await import("../src/scripts/jwt/jwt-crypto.ts")),
+  ...(await import("../src/scripts/jwt/jwt-view.ts")),
+  ...(await import("../src/scripts/jwt/jwt-decoder.ts")),
+  ...(await import("../src/scripts/jwt/jwt-encoder.ts")),
+};
 
 /* ------------------------------- helpers -------------------------------- */
 const encSel = globalThis.document.querySelector("#encAlg");
