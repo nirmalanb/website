@@ -1,6 +1,6 @@
 ---
 title: Understanding Cross-Site Scripting - A Security Primer
-excerpt: Learn how XSS attacks work, why your session cookies are vulnerable, and the exact defense strategies that actually stop attackers—from HTTP-only flags to Content Security Policies.
+excerpt: XSS is what happens when your app hands user input back to the browser as code. Here is how the three kinds work, why session cookies disappear when it lands, and the defenses that hold up.
 publishDate: 'Apr 01 2026'
 isPublished: true
 tags:
@@ -17,11 +17,11 @@ seo:
 
 **Co-authored by:** [Sijo Sam](https://sijosam.com/)
 
-Most engineers think they understand XSS. They don't. You'll hear people say "cross-sight," but it's actually "cross-site scripting." We call it XSS because CSS was already taken by Cascading Style Sheets. If you work in web security or development, this is baseline knowledge you can't skip.
+Most engineers think they understand XSS. They don't. You'll hear people say "cross-sight," but it's "cross-site scripting." We call it XSS because CSS was already taken by Cascading Style Sheets. If you work in web security or development, this is baseline knowledge.
 
 ## The Core Mechanism
 
-Here's what happens: attackers inject malicious code into your web application, usually JavaScript. Your browser executes it because it can't tell the difference between your legitimate scripts and their garbage. The reason? Your application doesn't sanitize user input before spitting it back out.
+Here's what happens. An attacker injects code, usually JavaScript, into your web application. Your browser runs it because it can't tell your legitimate scripts from their garbage. The reason is simple: your application doesn't sanitize user input before it hands the input back out.
 
 ```mermaid
 graph LR
@@ -35,7 +35,7 @@ graph LR
 
 ### 1. Persistent XSS (Stored)
 
-The attacker's payload lives in your database. Every user who hits that page gets infected. A forum post with malicious code? Everyone who reads it triggers the exploit. Attackers love this method for stealing credentials, logging keystrokes, or spreading malware fast.
+The payload lives in your database. Every user who hits that page gets hit. A forum post with malicious code means everyone who reads it triggers the exploit. Attackers love this method for stealing credentials, logging keystrokes, and spreading malware fast.
 
 ```mermaid
 sequenceDiagram
@@ -64,7 +64,7 @@ sequenceDiagram
 
 ### 2. Non-Persistent XSS (Reflected)
 
-The malicious content bounces right back from the server without getting stored. You see this in search queries or error messages. It's temporary, but it works when you pair it with social engineering. Attackers craft sketchy URLs and trick people into clicking them.
+The malicious content bounces straight back from the server without being stored. You see it in search queries and error messages. It's temporary, but it works when you pair it with social engineering. Attackers craft a sketchy URL and talk someone into clicking it.
 
 ```mermaid
 sequenceDiagram
@@ -82,7 +82,7 @@ sequenceDiagram
 
 ### 3. Client-Side XSS (DOM-based)
 
-This one never touches your server. JavaScript grabs data from the URL and shoves it straight into the page using something like innerHTML. No server processing means these bugs slip past a lot of security reviews.
+This one never touches your server. JavaScript pulls data from the URL and shoves it into the page, often with something like innerHTML. No server processing means these bugs slip past a lot of security reviews.
 
 ```mermaid
 graph TD
@@ -94,7 +94,7 @@ graph TD
 
 ## Defense Strategies
 
-Tools like SuperTokens give you practical protection through HTTP-only cookie flags. JavaScript can't touch session tokens. Their setup uses short-lived access tokens with longer refresh tokens, so you're not exposing credentials for long. The server handles all auth decisions, and they bake in anti-CSRF protection.
+Tools like SuperTokens give you practical protection through HTTP-only cookie flags, so JavaScript can't touch session tokens. Their setup uses short-lived access tokens with longer refresh tokens, which keeps credentials exposed for less time. The server makes all the auth decisions, and they build in anti-CSRF protection.
 
 ```mermaid
 graph TB
@@ -113,9 +113,9 @@ graph TB
 
 ## What Actually Works
 
-Encode your output. Treat all user data as plain text, not executable code. Use textContent instead of innerHTML. Input validation helps, but don't bet everything on it. Set up Content Security Policies to block unauthorized scripts.
+Encode your output. Treat all user data as plain text, never executable code. Use textContent instead of innerHTML. Input validation helps, but don't bet everything on it. Set a Content Security Policy to block scripts you didn't authorize.
 
-React, Angular, and Vue give you automatic escaping, which cuts your risk way down. But you can still screw it up if you're careless.
+React, Angular, and Vue escape output for you, which cuts the risk a long way. You can still screw it up if you're careless.
 
 ### Dangerous Functions to Avoid
 
@@ -134,7 +134,7 @@ graph TD
 
 ## Session Theft Techniques
 
-Session cookies are what attackers want. If you don't set HTTP-only flags, scripts can read document.cookie. Basic attacks just grab that data and send it to the attacker's server.
+Session cookies are the prize. Without HTTP-only flags, a script can read document.cookie. The basic attack grabs that data and sends it to the attacker's server.
 
 ```mermaid
 sequenceDiagram
@@ -224,7 +224,7 @@ graph TB
     Risk3 --> Vuln
 ```
 
-Once attackers steal your credentials, they own the account. No password needed. That's why you need multiple layers: HTTP-only cookies, solid session management, and enforced CSPs turn XSS from a critical threat into something you can actually manage.
+Once an attacker steals your credentials, they own the account. No password needed. That's why you want layers: HTTP-only cookies, solid session management, and an enforced CSP turn XSS from a critical threat into something you can manage.
 
 ---
 
