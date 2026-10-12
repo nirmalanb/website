@@ -71,13 +71,13 @@ This is not a museum piece. It turns up wherever code trusts the header instead 
 One rule covers the whole class: **the expected algorithm is server configuration, not token data.** The verifier already knows which algorithm it will accept. It must not take that decision from the header.
 
 ```js
-// Node — node-jsonwebtoken
+// Node: node-jsonwebtoken
 // The algorithms array is the allowlist. 'none' is not in it.
 jwt.verify(token, publicKey, { algorithms: ['RS256'] });
 ```
 
 ```python
-# Python — PyJWT
+# Python: PyJWT
 # Passing algorithms is mandatory in PyJWT; never omit it.
 jwt.decode(token, public_key, algorithms=["RS256"])
 ```
