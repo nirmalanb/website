@@ -1,0 +1,231 @@
+---
+title: Understanding Cross-Site Scripting - A Security Primer
+excerpt: Learn how XSS attacks work, why your session cookies are vulnerable, and the exact defense strategies that actually stop attackers—from HTTP-only flags to Content Security Policies.
+publishDate: 'Apr 01 2026'
+isPublished: true
+tags:
+  - Web Security
+  - XSS
+  - Session Management
+  - Security Best Practices
+  - Frontend Security
+seo:
+  image:
+    src: https://res.cloudinary.com/dnmuyrcd7/image/upload/Gemini_Generated_Image_sfhxv4sfhxv4sfhx_shlu1w.png
+    alt: 'Diagram showing XSS attack flow from attacker injection through browser execution to session theft'
+---
+
+**Co-authored by:** [Sijo Sam](https://sijosam.com/)
+
+Most engineers think they understand XSS. They don't. You'll hear people say "cross-sight," but it's actually "cross-site scripting." We call it XSS because CSS was already taken by Cascading Style Sheets. If you work in web security or development, this is baseline knowledge you can't skip.
+
+## The Core Mechanism
+
+Here's what happens: attackers inject malicious code into your web application, usually JavaScript. Your browser executes it because it can't tell the difference between your legitimate scripts and their garbage. The reason? Your application doesn't sanitize user input before spitting it back out.
+
+```mermaid
+graph LR
+    A[Attacker] -->|Injects script| B[Web Application]
+    B -->|Returns unsanitized| C[Victim Browser]
+    C -->|Executes code| D[Attack Success]
+    D -->|Steals data| A
+```
+
+## Three Primary Categories
+
+### 1. Persistent XSS (Stored)
+
+The attacker's payload lives in your database. Every user who hits that page gets infected. A forum post with malicious code? Everyone who reads it triggers the exploit. Attackers love this method for stealing credentials, logging keystrokes, or spreading malware fast.
+
+```mermaid
+sequenceDiagram
+    participant Attacker
+    participant Server
+    participant Database
+    participant Victim1
+    participant Victim2
+
+    Attacker->>Server: Submit malicious comment
+    Server->>Database: Store payload
+    Note over Database: Malicious script stored
+
+    Victim1->>Server: Request page
+    Server->>Database: Retrieve comments
+    Database->>Server: Return with payload
+    Server->>Victim1: Send page with script
+    Note over Victim1: Script executes
+
+    Victim2->>Server: Request same page
+    Server->>Database: Retrieve comments
+    Database->>Server: Return with payload
+    Server->>Victim2: Send page with script
+    Note over Victim2: Script executes
+```
+
+### 2. Non-Persistent XSS (Reflected)
+
+The malicious content bounces right back from the server without getting stored. You see this in search queries or error messages. It's temporary, but it works when you pair it with social engineering. Attackers craft sketchy URLs and trick people into clicking them.
+
+```mermaid
+sequenceDiagram
+    participant Attacker
+    participant Victim
+    participant Server
+
+    Attacker->>Victim: Send malicious link
+    Note over Attacker and Victim: example.com/search?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E
+    Victim->>Server: Click link (send request)
+    Server->>Victim: Reflect input in response
+    Note over Victim: Browser executes script
+    Victim->>Attacker: Session data leaked
+```
+
+### 3. Client-Side XSS (DOM-based)
+
+This one never touches your server. JavaScript grabs data from the URL and shoves it straight into the page using something like innerHTML. No server processing means these bugs slip past a lot of security reviews.
+
+```mermaid
+graph TD
+    A[User visits page] --> B[JavaScript reads URL]
+    B --> C{Safe method?}
+    C -->|innerHTML| D[Code executes - XSS]
+    C -->|textContent| E[Safe rendering]
+```
+
+## Defense Strategies
+
+Tools like SuperTokens give you practical protection through HTTP-only cookie flags. JavaScript can't touch session tokens. Their setup uses short-lived access tokens with longer refresh tokens, so you're not exposing credentials for long. The server handles all auth decisions, and they bake in anti-CSRF protection.
+
+```mermaid
+graph TB
+    A[Input Validation] --> B[Output Encoding]
+    B --> C[Content Security Policy]
+    C --> D[HTTP-Only Cookies]
+    D --> E[Secure Session Management]
+
+    F[XSS Attempt] --> A
+    A -.blocks.-> G[Invalid Input]
+    B -.sanitizes.-> H[Safe Output]
+    C -.restricts.-> I[Script Blocked]
+    D -.protects.-> J[Cookie Protected]
+    E -.validates.-> K[Session Safe]
+```
+
+## What Actually Works
+
+Encode your output. Treat all user data as plain text, not executable code. Use textContent instead of innerHTML. Input validation helps, but don't bet everything on it. Set up Content Security Policies to block unauthorized scripts.
+
+React, Angular, and Vue give you automatic escaping, which cuts your risk way down. But you can still screw it up if you're careless.
+
+### Dangerous Functions to Avoid
+
+```mermaid
+graph TD
+    A[Dangerous Functions] --> B[eval]
+    A --> C[innerHTML]
+    A --> D[document.write]
+    A --> E[setTimeout with string]
+
+    B --> B1[Executes arbitrary code]
+    C --> C1[Can execute scripts]
+    D --> D1[Overwrites content]
+    E --> E1[Acts like eval]
+```
+
+## Session Theft Techniques
+
+Session cookies are what attackers want. If you don't set HTTP-only flags, scripts can read document.cookie. Basic attacks just grab that data and send it to the attacker's server.
+
+```mermaid
+sequenceDiagram
+    participant Victim Browser
+    participant Malicious Script
+    participant Attacker Server
+
+    Note over Victim Browser: XSS vulnerability exploited
+    Malicious Script->>Victim Browser: Read document.cookie
+    Victim Browser->>Malicious Script: Return session token
+
+    alt Noisy Method
+        Malicious Script->>Victim Browser: window.location redirect
+        Note over Victim Browser: Page flashes/reloads
+        Victim Browser->>Attacker Server: Cookie in URL
+    else Stealth Method
+        Malicious Script->>Malicious Script: Create new Image()
+        Malicious Script->>Attacker Server: Set img.src with cookie
+        Note over Attacker Server: Cookie received silently
+        Note over Victim Browser: No visible changes
+    end
+
+    Attacker Server->>Attacker Server: Store stolen session
+    Note over Attacker Server: Impersonate victim
+```
+
+## HTTP-Only Cookie Protection
+
+```mermaid
+graph LR
+    A1[JavaScript] -->|Without HTTP-Only| B1[Access Granted]
+    B1 --> C1[Session Stolen]
+
+    A2[JavaScript] -->|With HTTP-Only| B2[Access Denied]
+    B2 --> C2[Session Protected]
+```
+
+## Token-Based Security Architecture
+
+```mermaid
+graph TD
+    A[User Logs In] --> B[Server Issues Tokens]
+    B --> C[Short-lived Access Token]
+    B --> D[Long-lived Refresh Token HTTP-Only]
+
+    C --> E{Access Valid?}
+    E -->|Yes| F[Grant Access]
+    E -->|Expired| G[Use Refresh Token]
+
+    G --> H{Refresh Valid?}
+    H -->|Yes| I[New Access Token]
+    H -->|No| J[Re-authenticate]
+
+    I --> F
+
+    K[XSS Attack] -.attempts.-> C
+    K -.blocked.-> D
+```
+
+## Comprehensive XSS Prevention Strategy
+
+```mermaid
+graph TB
+    Start[User Input] --> Val[Validation]
+    Val --> San[Sanitization]
+    San --> Enc[Encoding]
+    Enc --> Out[Output to Browser]
+
+    Out --> CSP{CSP Active?}
+    CSP -->|Yes| Safe1[Scripts Restricted]
+    CSP -->|No| Risk1[Scripts Can Run]
+
+    Out --> Cook{HTTP-Only?}
+    Cook -->|Yes| Safe2[JS Cannot Access]
+    Cook -->|No| Risk2[Vulnerable]
+
+    Out --> Frame{Modern Framework?}
+    Frame -->|Yes| Safe3[Auto-Escaping]
+    Frame -->|No| Risk3[Manual Escaping]
+
+    Safe1 --> Secure[Protected]
+    Safe2 --> Secure
+    Safe3 --> Secure
+
+    Risk1 --> Vuln[Vulnerable]
+    Risk2 --> Vuln
+    Risk3 --> Vuln
+```
+
+Once attackers steal your credentials, they own the account. No password needed. That's why you need multiple layers: HTTP-only cookies, solid session management, and enforced CSPs turn XSS from a critical threat into something you can actually manage.
+
+---
+
+**Reference:** [MDN Web Security - XSS](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/XSS)

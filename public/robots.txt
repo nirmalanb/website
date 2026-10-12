@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://nirmala.mrsamdev.xyz/sitemap-index.xml

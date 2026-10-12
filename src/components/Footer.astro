@@ -1,0 +1,39 @@
+---
+import { profile, contactLinks } from '../data/resume';
+---
+
+<footer id="contact" class="scroll-mt-16">
+  <div class="mx-auto max-w-2xl px-6 pb-12">
+    <div class="rounded-2xl bg-deep px-6 py-8 sm:px-8 sm:py-9">
+      <h2 class="text-lg text-white">Contact</h2>
+
+      <p class="mt-4 max-w-prose text-[15px] text-fog">
+        Open to work in application, API and infrastructure security, secure SDLC reviews and
+        AI/LLM risk assessment. If you're hiring, or just want to talk shop about LLM risk, email
+        is fastest.
+      </p>
+
+      <ul class="mt-6 space-y-4">
+        {
+          contactLinks.map((c) => (
+            <li class="flex flex-col sm:flex-row sm:items-baseline sm:gap-4">
+              <p class="shrink-0 font-display text-sm text-mint sm:w-20">{c.label}</p>
+              <a
+                href={c.href}
+                class="link-mint mt-0.5 break-words text-sm sm:mt-0"
+                target={c.external ? '_blank' : undefined}
+                rel={c.external ? 'noopener noreferrer' : undefined}
+              >
+                {c.value}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+
+      <p class="mt-8 border-t border-white/10 pt-4 text-sm text-fog/70">
+        © {new Date().getFullYear()} {profile.name}, {profile.location}
+      </p>
+    </div>
+  </div>
+</footer>

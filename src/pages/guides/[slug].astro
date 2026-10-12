@@ -1,0 +1,58 @@
+---
+import { getCollection, render } from 'astro:content';
+import Layout from '../../layouts/Layout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+
+export async function getStaticPaths() {
+  const guides = await getCollection('guides');
+  return guides.map((guide) => ({
+    params: { slug: guide.id },
+    props: { guide },
+  }));
+}
+
+const { guide } = Astro.props;
+const { Content } = await render(guide);
+---
+
+<Layout
+  title={`${guide.data.title} — Nirmala NB`}
+  description={guide.data.excerpt}
+  image={guide.data.seo?.image?.src}
+>
+  <Header />
+  <main id="main-content">
+    <article class="mx-auto max-w-2xl px-6 pb-12 pt-12 sm:pt-14">
+      <p class="text-sm text-mute">
+        Guide ·
+        <time datetime={guide.data.publishDate.toISOString()}>
+          {guide.data.publishDate.toLocaleDateString('en-GB', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })}
+        </time>
+      </p>
+      <h1 class="mt-2 text-3xl text-ink sm:text-4xl">{guide.data.title}</h1>
+      <p class="mt-4 max-w-prose text-[15px] leading-relaxed text-mute">{guide.data.excerpt}</p>
+
+      <div class="prose mt-8">
+        <Content />
+      </div>
+
+      <p class="mt-12 rule pt-6 text-sm">
+        <a href="/guides/" class="link">← All guides</a>
+      </p>
+
+      {
+        guide.data.tags.length > 0 && (
+          <p class="mt-4 text-sm text-mute">
+            {guide.data.tags.map((tag) => `#${tag.replace(/[^a-zA-Z0-9]/g, '')}`).join(' ')}
+          </p>
+        )
+      }
+    </article>
+  </main>
+  <Footer />
+</Layout>

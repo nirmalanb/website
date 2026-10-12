@@ -1,0 +1,17 @@
+---
+import Section from './Section.astro';
+import { skillGroups } from '../data/resume';
+---
+
+<Section id="skills" title="Skills">
+  <dl class="space-y-5">
+    {
+      skillGroups.map((group) => (
+        <div class="grid gap-1 sm:grid-cols-[190px_1fr] sm:gap-6">
+          <dt class="text-[15px] font-medium text-ink">{group.label}</dt>
+          <dd class="text-[15px] text-body">{group.skills.join(' · ')}</dd>
+        </div>
+      ))
+    }
+  </dl>
+</Section>

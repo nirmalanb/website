@@ -1,0 +1,31 @@
+---
+import { profile, contactLinks } from '../data/resume';
+---
+
+<section id="about" class="mx-auto max-w-2xl scroll-mt-16 px-6 pb-12 pt-12 sm:pt-14">
+  <h1 class="text-3xl text-ink sm:text-4xl">{profile.name}</h1>
+
+  <p class="mt-3 text-ink">{profile.role}</p>
+  <p class="mt-0.5 text-sm text-mute">{profile.now}</p>
+
+  <p class="mt-5 max-w-prose text-[15px] leading-relaxed">
+    <span class="font-medium text-ink">{profile.tagline}</span> {profile.summary}
+  </p>
+
+  <ul class="mt-6 flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
+    {
+      contactLinks.map((c) => (
+        <li>
+          <a
+            href={c.href}
+            class="link"
+            target={c.external ? '_blank' : undefined}
+            rel={c.external ? 'noopener noreferrer' : undefined}
+          >
+            {c.value}
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</section>

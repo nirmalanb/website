@@ -1,0 +1,356 @@
+@import "tailwindcss";
+
+@theme {
+  /* ink — deep teal, the site's voice */
+  --color-ink: #004747;
+  --color-body: #1c2524;
+  --color-mute: #52706d;
+
+  /* surfaces */
+  --color-paper: #f6f9f9;
+  --color-rule: #dbe7e7;
+
+  /* greens — from the master resume (009669 / 007a54) */
+  --color-accent: #007a54;
+  --color-accent-bright: #009669;
+  --color-mint: #92efc5;
+
+  /* dark band */
+  --color-deep: #0f1716;
+  --color-fog: #cfe3df;
+
+  --font-display: "Baloo 2", ui-rounded, "Segoe UI", system-ui, sans-serif;
+  --font-sans: "Nunito", ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-body);
+  font-family: var(--font-sans);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(146, 239, 197, 0.5);
+  color: var(--color-ink);
+}
+
+h1,
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+.link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--color-accent) 30%, transparent);
+  text-underline-offset: 3px;
+  transition:
+    color 0.15s ease,
+    text-decoration-color 0.15s ease;
+}
+
+.link:hover {
+  color: var(--color-ink);
+  text-decoration-color: currentColor;
+}
+
+.link-mint {
+  color: var(--color-mint);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--color-mint) 35%, transparent);
+  text-underline-offset: 3px;
+  transition:
+    color 0.15s ease,
+    text-decoration-color 0.15s ease;
+}
+
+.link-mint:hover {
+  color: #ffffff;
+  text-decoration-color: currentColor;
+}
+
+.rule {
+  border-top: 1px solid var(--color-rule);
+}
+
+.pulse-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-accent-bright);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pulse-dot {
+    animation: pulse-ring 2.4s ease-out infinite;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 150, 105, 0.45);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 6px rgba(0, 150, 105, 0);
+  }
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 50;
+}
+
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.5rem;
+  background: var(--color-ink);
+  color: #ffffff;
+  font-size: 0.875rem;
+}
+
+.link:focus-visible,
+.link-mint:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--color-accent-bright);
+  outline-offset: 3px;
+}
+
+/* --- guide prose --- */
+
+.prose {
+  color: var(--color-body);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.prose h2,
+.prose h3,
+.prose h4 {
+  color: var(--color-ink);
+  text-wrap: balance;
+}
+
+.prose h2 {
+  margin-top: 2.25rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.25rem;
+}
+
+.prose h3 {
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 1.05rem;
+}
+
+.prose h4 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+
+.prose p {
+  margin-top: 1rem;
+  max-width: 70ch;
+  text-wrap: pretty;
+}
+
+.prose a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--color-accent) 30%, transparent);
+  text-underline-offset: 3px;
+  transition:
+    color 0.15s ease,
+    text-decoration-color 0.15s ease;
+}
+
+.prose a:hover {
+  color: var(--color-ink);
+  text-decoration-color: currentColor;
+}
+
+.prose strong {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.prose ul,
+.prose ol {
+  margin-top: 1rem;
+  padding-left: 1.5rem;
+}
+
+.prose ul {
+  list-style: disc;
+}
+
+.prose ol {
+  list-style: decimal;
+}
+
+.prose li {
+  margin-top: 0.375rem;
+}
+
+.prose li::marker {
+  color: var(--color-mute);
+}
+
+.prose blockquote {
+  margin-top: 1.25rem;
+  border-left: 1px solid var(--color-rule);
+  padding-left: 1.25rem;
+  color: var(--color-mute);
+}
+
+.prose hr {
+  margin-block: 2rem;
+  border-top: 1px solid var(--color-rule);
+}
+
+.prose img,
+.prose svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.prose :not(pre) > code {
+  border-radius: 0.375rem;
+  background: color-mix(in oklab, var(--color-rule) 45%, var(--color-paper));
+  padding: 0.1em 0.35em;
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+}
+
+.prose pre {
+  margin-top: 1.25rem;
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  background: var(--color-deep) !important; /* beats shiki's inline #24292e */
+  color: var(--color-fog) !important;
+  padding: 1rem 1.25rem;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.prose pre code {
+  color: var(--color-fog);
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+}
+
+/* mermaid diagrams (rendered client-side by astro-mermaid-satteri) */
+
+.prose pre.mermaid,
+.prose .mermaid {
+  margin-block: 1.5rem;
+  overflow-x: auto;
+  text-align: center;
+}
+
+/* Raw source briefly visible before the client script renders; style it as a
+   deliberate placeholder rather than browser-default pre. */
+.prose pre.mermaid {
+  border-radius: 0.75rem;
+  background: color-mix(in oklab, var(--color-rule) 30%, var(--color-paper)) !important;
+  padding: 1rem;
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  color: var(--color-mute) !important;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.prose pre.mermaid code {
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+}
+
+.prose pre.mermaid svg,
+.prose .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.prose table {
+  margin-top: 1.5rem;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.prose th {
+  border-bottom: 1px solid var(--color-mute);
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.prose td {
+  border-top: 1px solid var(--color-rule);
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  vertical-align: top;
+}
+
+@media print {
+  header,
+  .skip-link,
+  #contact {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
+
+  h1,
+  h2,
+  h3 {
+    color: #000000;
+  }
+
+  .rule {
+    border-color: #d0d0d0;
+  }
+}

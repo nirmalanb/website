@@ -1,0 +1,27 @@
+---
+import Section from './Section.astro';
+import { education } from '../data/resume';
+---
+
+<Section id="education" title="Education & certifications">
+  <div class="space-y-6 text-[15px]">
+    <div>
+      <h3 class="font-medium text-ink">{education.degree} — {education.institution}</h3>
+      <p class="text-sm text-mute">{education.year}</p>
+    </div>
+
+    <div>
+      <h3 class="font-medium text-ink">Certifications</h3>
+      <ul class="mt-1 space-y-1">
+        {education.certs.map((c) => <li class="text-mute">{c}</li>)}
+      </ul>
+    </div>
+
+    <div>
+      <h3 class="font-medium text-ink">Languages</h3>
+      <p class="mt-1 text-mute">
+        {education.languages.map((l) => `${l.name} (${l.level.toLowerCase()})`).join(' · ')}
+      </p>
+    </div>
+  </div>
+</Section>

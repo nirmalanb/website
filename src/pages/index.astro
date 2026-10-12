@@ -1,0 +1,59 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Intro from '../components/Intro.astro';
+import Experience from '../components/Experience.astro';
+import Skills from '../components/Skills.astro';
+import Education from '../components/Education.astro';
+import Footer from '../components/Footer.astro';
+import { education, profile, skillGroups } from '../data/resume';
+
+// Structured data. Every value here is already visible on the page — no invented
+// profiles, no sameAs links to accounts that don't exist.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Person',
+      '@id': `${Astro.site}#person`,
+      name: profile.name,
+      jobTitle: profile.role,
+      description: profile.summary,
+      email: `mailto:${profile.email}`,
+      url: Astro.site,
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: 'Dubai',
+        addressCountry: 'AE',
+      },
+      sameAs: [profile.linkedinUrl],
+      knowsAbout: skillGroups.flatMap((group) => group.skills),
+      alumniOf: { '@type': 'CollegeOrUniversity', name: education.institution },
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${Astro.site}#website`,
+      url: Astro.site,
+      name: 'Nirmala NB',
+      inLanguage: 'en',
+      publisher: { '@id': `${Astro.site}#person` },
+    },
+  ],
+};
+---
+
+<Layout>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  <Fragment
+  set:html={'<!--\n  Hello, source-reader. Checking a page for hidden things is exactly the right instinct.\n  There is nothing here except this comment. If you find something anyway: nbnirmala1999@gmail.com\n-->'}
+/>
+<div id="top"></div>
+  <Header />
+  <main id="main-content">
+    <Intro />
+    <Experience />
+    <Skills />
+    <Education />
+  </main>
+  <Footer />
+</Layout>
