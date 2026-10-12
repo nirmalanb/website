@@ -1,8 +1,3 @@
-/**
- * Decoder panel: paste a token, decode header/payload, verify the signature.
- * Exposes a small surface so the entry module can wire the cross-panel buttons.
- */
-
 import { $, $$ } from 'domsure';
 import { CLS } from './jwt-ui.ts';
 import type { JsonObject } from './jwt-crypto.ts';
@@ -48,6 +43,7 @@ const state: JwtState = {
   verifiedKey: null,
 };
 let verifyToken = 0;
+let verifyTimer: ReturnType<typeof setTimeout> | undefined;
 
 function syncScroll(): void {
   tokBack.scrollTop = tokInput.scrollTop;
@@ -115,8 +111,10 @@ function renderStatus(): void {
 function scheduleVerify(): void {
   const id = ++verifyToken;
   const key = secretInput.value;
-  if (!state.raw || state.parts.length !== 3 || !state.alg) return;
-  if (state.alg === 'none') {
+  const raw = state.raw;
+  const alg = state.alg;
+  if (!raw || state.parts.length !== 3 || !alg) return;
+  if (alg === 'none') {
     const el = $.optional('#sigBadge');
     if (el) el.innerHTML = badge('warn', 'Unsigned token (alg: none)');
     $.required('#secretState').innerHTML =
@@ -124,7 +122,10 @@ function scheduleVerify(): void {
     return;
   }
   if (!key) return;
-  void runVerify(id, key, state.raw, state.alg);
+  clearTimeout(verifyTimer);
+  verifyTimer = setTimeout(() => {
+    void runVerify(id, key, raw, alg);
+  }, 120);
 }
 
 async function runVerify(id: number, key: string, raw: string, alg: string): Promise<void> {
@@ -150,7 +151,6 @@ async function runVerify(id: number, key: string, raw: string, alg: string): Pro
     state.verifiedKey = null;
     const el = $.optional('#sigBadge');
     const msg = (err as Error).message;
-    // A malformed signature segment is a definite failure, not an "error".
     const malformed = /not valid base64url|could not be base64url-decoded/i.test(msg);
     if (el) el.innerHTML = malformed ? badge('bad', msg) : badge('warn', 'Verification error — ' + msg);
     $.required('#secretState').innerHTML = '<span class="' + CLS.warnText + '">' + esc(msg) + '</span>';
@@ -219,7 +219,6 @@ export function decodeToken(): void {
   scheduleVerify();
 }
 
-/** Replace the token (and optionally the key) and decode it. */
 export function loadToken(raw: string, key?: string): void {
   tokInput.value = raw;
   if (key !== undefined) secretInput.value = key;
@@ -227,7 +226,6 @@ export function loadToken(raw: string, key?: string): void {
   decodeToken();
 }
 
-/** Snapshot for the Decoder → Encoder handoff. */
 export function snapshot(): { header: JsonObject | null; payload: JsonObject | null; alg: string | null; secret: string; verified: string | null } {
   return {
     header: state.header,
@@ -237,8 +235,6 @@ export function snapshot(): { header: JsonObject | null; payload: JsonObject | n
     verified: state.verifiedKey,
   };
 }
-
-/* --------------------------------------------------------------- wiring */
 
 tokInput.addEventListener('input', () => {
   renderTokenLayer();
@@ -283,7 +279,6 @@ $.required('#btnClearSecret').addEventListener('click', () => {
   scheduleVerify();
 });
 
-/** Prefill the demo token so the page is useful on first load. */
 export function boot(): void {
   loadToken(DEMO_TOKEN, EXAMPLE_SECRET);
 }

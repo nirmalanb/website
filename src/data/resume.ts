@@ -12,7 +12,6 @@ export const profile = {
   linkedinUrl: 'https://linkedin.com/in/nirmala-nb',
 };
 
-// Single source of truth for contact details — used by the intro and the footer.
 export interface ContactLink {
   label: string;
   value: string;
@@ -26,7 +25,6 @@ export const contactLinks: ContactLink[] = [
   { label: 'LinkedIn', value: 'in/nirmala-nb', href: profile.linkedinUrl, external: true },
 ];
 
-// Pull-quote removed — the Activ Bytes achievement is rendered in the Experience section below.
 export interface Role {
   title: string;
   company: string;

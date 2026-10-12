@@ -1,21 +1,17 @@
 @import "tailwindcss";
 
 @theme {
-  /* ink — deep teal, the site's voice */
   --color-ink: #004747;
   --color-body: #1c2524;
   --color-mute: #52706d;
 
-  /* surfaces */
   --color-paper: #f6f9f9;
   --color-rule: #dbe7e7;
 
-  /* greens — from the master resume (009669 / 007a54) */
   --color-accent: #007a54;
   --color-accent-bright: #009669;
   --color-mint: #92efc5;
 
-  /* dark band */
   --color-deep: #0f1716;
   --color-fog: #cfe3df;
 
@@ -150,8 +146,6 @@ a:focus-visible {
   outline-offset: 3px;
 }
 
-/* --- guide prose --- */
-
 .prose {
   color: var(--color-body);
   font-size: 15px;
@@ -261,7 +255,7 @@ a:focus-visible {
   margin-top: 1.25rem;
   overflow-x: auto;
   border-radius: 0.75rem;
-  background: var(--color-deep) !important; /* beats shiki's inline #24292e */
+  background: var(--color-deep) !important;
   color: var(--color-fog) !important;
   padding: 1rem 1.25rem;
   line-height: 1.6;
@@ -274,8 +268,6 @@ a:focus-visible {
   font-size: 0.8125rem;
 }
 
-/* mermaid diagrams (rendered client-side by astro-mermaid-satteri) */
-
 .prose pre.mermaid,
 .prose .mermaid {
   margin-block: 1.5rem;
@@ -283,8 +275,6 @@ a:focus-visible {
   text-align: center;
 }
 
-/* Raw source briefly visible before the client script renders; style it as a
-   deliberate placeholder rather than browser-default pre. */
 .prose pre.mermaid {
   border-radius: 0.75rem;
   background: color-mix(in oklab, var(--color-rule) 30%, var(--color-paper)) !important;

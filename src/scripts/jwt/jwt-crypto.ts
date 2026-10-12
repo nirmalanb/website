@@ -1,27 +1,16 @@
-/**
- * Pure JWS helpers — base64url, PEM, key import and sign/verify. No DOM access,
- * so this module is exercised directly by the test suite.
- */
-
 export type JsonObject = Record<string, unknown>;
 export type KeyInfo = { secret?: string; verified?: boolean };
 
 export type JwsAlg = {
   name: string;
   hash: string;
-  /** Symmetric (shared secret) instead of a PEM key. */
   secret?: true;
-  /** Import from an SPKI public key to verify. */
   spki?: true;
-  /** Import from a PKCS#8 private key to sign. */
   pkcs8?: true;
-  /** EC named curve for ECDSA. */
   curve?: string;
-  /** RSA-PSS salt length in bytes (JWA: the hash length). */
   salt?: number;
 };
 
-/** JWA algorithm table. Adding an algorithm is a row here, not a new branch. */
 export const JWS: Record<string, JwsAlg> = {
   HS256: { name: 'HMAC', hash: 'SHA-256', secret: true },
   HS384: { name: 'HMAC', hash: 'SHA-384', secret: true },
@@ -45,7 +34,6 @@ export function algInfo(alg: string): JwsAlg {
 
 const textEnc = new TextEncoder();
 const textDec = new TextDecoder();
-// Strict decode with a human-readable failure (JWS segments are unpadded base64url).
 const B64URL_RE = /^[A-Za-z0-9_-]+={0,2}$/;
 
 export function bytesToB64url(bytes: Uint8Array): string {
@@ -113,7 +101,6 @@ export function isPem(s: string): boolean {
   return /-----BEGIN/.test(s);
 }
 
-/** Web Crypto algorithm descriptor for a given JWA alg, used by sign and verify. */
 function paramsFor(alg: string): AlgorithmIdentifier | RsaPssParams | EcdsaParams {
   const a = algInfo(alg);
   if (a.name === 'RSA-PSS') return { name: 'RSA-PSS', saltLength: a.salt };
@@ -121,7 +108,6 @@ function paramsFor(alg: string): AlgorithmIdentifier | RsaPssParams | EcdsaParam
   return { name: a.name };
 }
 
-/** Import params for HMAC / RSA / EC, branching on the table row. */
 function importParams(alg: string): AlgorithmIdentifier | HmacImportParams | RsaHashedImportParams | EcKeyImportParams {
   const a = algInfo(alg);
   if (a.secret) return { name: 'HMAC', hash: a.hash };
@@ -139,14 +125,12 @@ export async function importKey(alg: string, keyText: string, usage: KeyUsage): 
   return crypto.subtle.importKey(format, der, importParams(alg), false, [usage]);
 }
 
-/** Verify `<header>.<payload>` against a signature segment with an imported key. */
 export async function verifySigned(raw: string, alg: string, key: CryptoKey): Promise<boolean> {
   const parts = raw.split('.');
   const data = textEnc.encode(parts[0] + '.' + parts[1]);
   return crypto.subtle.verify(paramsFor(alg), key, decodeSigBytes(parts[2]), data);
 }
 
-/** Sign header + payload. `none` emits an RFC 7519 unsecured JWT with an empty signature. */
 export async function signJwt(alg: string, keyText: string, header: JsonObject, payload: JsonObject): Promise<string> {
   header.alg = alg;
   const data = strToB64url(JSON.stringify(header)) + '.' + strToB64url(JSON.stringify(payload));
@@ -164,7 +148,6 @@ export async function verifyTokenWithKey(token: string, alg: string, keyText: st
   return verifySigned(String(token), alg, await importKey(alg, keyText, 'verify'));
 }
 
-/** Derive the SPKI public PEM from a PKCS#8 private PEM via JWK. */
 export async function publicKeyFromPrivatePem(alg: string, privPem: string): Promise<string> {
   const algo = importParams(alg);
   const priv = await crypto.subtle.importKey('pkcs8', pemToDer(privPem), algo, true, ['sign']);

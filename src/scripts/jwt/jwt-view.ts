@@ -1,15 +1,13 @@
-/**
- * Pure string builders for the decoded panes: the JSON tree, the claims table,
- * status badges and the colourised token. No DOM writes except `setPaneHtml`,
- * which caches the rendered key so identical re-renders are skipped (that keeps
- * a user's collapsed/expanded <details> state across decoding).
- */
-
 import { CLS, TREE_PL } from './jwt-ui.ts';
 import type { JsonObject } from './jwt-crypto.ts';
 
 export function esc(s: unknown): string {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 export const CLAIM_DOCS: Record<string, { d: string; fmt?: string }> = {
@@ -56,9 +54,135 @@ export function relTime(sec: number): string {
   return 'just now';
 }
 
-/** "Line L, column C: message" for invalid JSON, else null. Blank is not an error. */
 const ERR_POS = /\s*(?:in JSON )?at position (\d+)(?: \(line \d+ column \d+\))?/;
 const ERR_NOISE = /,\s*"[\s\S]*is not valid JSON$/;
+
+function firstJsonErrorIndex(src: string): number | null {
+  const n = src.length;
+  let i = 0;
+  const ws = (): void => {
+    while (i < n) {
+      const c = src[i];
+      if (c === ' ' || c === '\t' || c === '\n' || c === '\r') i++;
+      else break;
+    }
+  };
+  const isDigit = (c: string | undefined): boolean => c !== undefined && c >= '0' && c <= '9';
+  const parseString = (): boolean => {
+    i++;
+    while (i < n) {
+      const c = src[i];
+      if (c === '"') {
+        i++;
+        return true;
+      }
+      if (c === '\\') {
+        i++;
+        const e = src[i];
+        if (e === undefined) return false;
+        if (e === 'u') {
+          for (let k = 0; k < 4; k++) {
+            i++;
+            const h = src[i];
+            if (h === undefined || !/[0-9a-fA-F]/.test(h)) return false;
+          }
+          i++;
+          continue;
+        }
+        if ('"\\/bfnrt'.includes(e)) {
+          i++;
+          continue;
+        }
+        return false;
+      }
+      if (c.charCodeAt(0) < 0x20) return false;
+      i++;
+    }
+    return false;
+  };
+  const parseNumber = (): boolean => {
+    if (src[i] === '-') i++;
+    if (src[i] === '0') i++;
+    else if (isDigit(src[i])) {
+      while (isDigit(src[i])) i++;
+    } else return false;
+    if (src[i] === '.') {
+      i++;
+      if (!isDigit(src[i])) return false;
+      while (isDigit(src[i])) i++;
+    }
+    if (src[i] === 'e' || src[i] === 'E') {
+      i++;
+      if (src[i] === '+' || src[i] === '-') i++;
+      if (!isDigit(src[i])) return false;
+      while (isDigit(src[i])) i++;
+    }
+    return true;
+  };
+  const parseValue = (): boolean => {
+    ws();
+    const c = src[i];
+    if (c === undefined) return false;
+    if (c === '{') {
+      i++;
+      ws();
+      if (src[i] === '}') {
+        i++;
+        return true;
+      }
+      for (;;) {
+        ws();
+        if (src[i] !== '"' || !parseString()) return false;
+        ws();
+        if (src[i] !== ':') return false;
+        i++;
+        if (!parseValue()) return false;
+        ws();
+        if (src[i] === ',') {
+          i++;
+          continue;
+        }
+        if (src[i] === '}') {
+          i++;
+          return true;
+        }
+        return false;
+      }
+    }
+    if (c === '[') {
+      i++;
+      ws();
+      if (src[i] === ']') {
+        i++;
+        return true;
+      }
+      for (;;) {
+        if (!parseValue()) return false;
+        ws();
+        if (src[i] === ',') {
+          i++;
+          continue;
+        }
+        if (src[i] === ']') {
+          i++;
+          return true;
+        }
+        return false;
+      }
+    }
+    if (c === '"') return parseString();
+    if (c === '-' || isDigit(c)) return parseNumber();
+    if (src.startsWith('true', i) || src.startsWith('false', i) || src.startsWith('null', i)) {
+      i += src[i] === 't' ? 4 : src[i] === 'f' ? 5 : 4;
+      return true;
+    }
+    return false;
+  };
+  ws();
+  if (!parseValue()) return i;
+  ws();
+  return i === n ? null : i;
+}
 
 export function jsonError(src: string): string | null {
   if (!src.trim()) return null;
@@ -69,15 +193,13 @@ export function jsonError(src: string): string | null {
   } catch (e) {
     raw = (e as Error).message;
   }
-  const msg = raw.replace(ERR_NOISE, '').replace(ERR_POS, '').trim();
-  const hit = ERR_POS.exec(raw);
-  if (!hit) return msg;
-  const before = src.slice(0, Number(hit[1]));
+  const msg = raw.replace(ERR_NOISE, '').replace(ERR_POS, '').trim() || 'Invalid JSON.';
+  const at = firstJsonErrorIndex(src);
+  if (at === null) return msg;
+  const before = src.slice(0, at);
   const line = before.split('\n').length;
-  return 'Line ' + line + ', column ' + (Number(hit[1]) - before.lastIndexOf('\n')) + ': ' + msg;
+  return 'Line ' + line + ', column ' + (at - before.lastIndexOf('\n')) + ': ' + msg;
 }
-
-/* ------------------------------------------------------------- JSON tree */
 
 function jtPrimitive(v: unknown): string {
   if (v === null) return '<span class="' + CLS.jtNull + '">null</span>';
@@ -118,8 +240,6 @@ function jtNode(value: unknown, key: string | null, depth: number, isIndex: bool
   return '<div class="' + line + '">' + head + jtPrimitive(value) + '</div>';
 }
 
-/** Collapsible, syntax-coloured JSON view. Every string goes through esc() so a
- *  malicious claim can never inject markup. */
 export function jsonTreeView(obj: unknown): string {
   return '<div class="' + CLS.tree + '">' + jtNode(obj, null, 0, false) + '</div>';
 }
@@ -133,8 +253,6 @@ export function setPaneHtml(body: HTMLElement, key: string, html: string): void 
   if (body.dataset) body.dataset.jwtKey = key;
   body.innerHTML = html;
 }
-
-/* ---------------------------------------------------------- claims table */
 
 export function claimsPane(obj: JsonObject, headerMode: boolean): string {
   const keys = Object.keys(obj || {});
@@ -160,14 +278,11 @@ export function claimsPane(obj: JsonObject, headerMode: boolean): string {
   return '<div class="' + CLS.claimsWrap + '">' + rows + '</tbody></table></div>';
 }
 
-/* -------------------------------------------------------------- badges */
-
 export function badge(kind: string, text: string): string {
   return '<span class="' + CLS.badgeBase + ' ' + CLS.badge[kind] + '">'
     + '<span class="' + CLS.dotm + '"></span>' + esc(text) + '</span>';
 }
 
-/** Split on dots and colour each base64url segment (jwt.io's red/violet/blue). */
 export function colorizeToken(raw: string): string {
   let out = '';
   const segs = raw.split('.');

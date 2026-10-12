@@ -1,9 +1,3 @@
-/**
- * Encoder panel: edit a header/payload, choose an algorithm and key, sign.
- * Exposes `loadIntoEncoder` for the Decoder → Encoder handoff and
- * `tokenForHandoff` for Encoder → Decoder.
- */
-
 import { $ } from 'domsure';
 import { CLS } from './jwt-ui.ts';
 import type { JsonObject, KeyInfo } from './jwt-crypto.ts';
@@ -21,7 +15,6 @@ const encHeaderError = $.required('#encHeaderError');
 const encPayloadError = $.required('#encPayloadError');
 let lastSignedToken = '';
 
-/** Validate both JSON fields as they are typed. */
 function validateJsonFields(): void {
   const pairs: [HTMLTextAreaElement, HTMLElement][] = [
     [encHeader, encHeaderError],
@@ -90,30 +83,29 @@ export async function signToken(): Promise<string> {
   return token;
 }
 
-/** b64url of the header with the current alg, used to detect a stale signed token. */
-function hdrB64(): string {
+function dataB64(): string | null {
   try {
-    return strToB64url(JSON.stringify(Object.assign(JSON.parse(encHeader.value), { alg: encAlg.value || 'HS256' })));
+    const header = Object.assign(JSON.parse(encHeader.value), { alg: encAlg.value || 'HS256' });
+    const payload = JSON.parse(encPayload.value);
+    return strToB64url(JSON.stringify(header)) + '.' + strToB64url(JSON.stringify(payload));
   } catch {
-    return '\u0000\u0000';
+    return null;
   }
 }
 
-/** Sign only if the last token doesn't match the current header + alg. */
 export async function tokenForHandoff(): Promise<string> {
-  let token = lastSignedToken;
-  if (!token || !token.startsWith(hdrB64())) token = await signToken();
-  return token;
+  const data = dataB64();
+  if (!lastSignedToken || data === null || !lastSignedToken.startsWith(data + '.')) {
+    return signToken();
+  }
+  return lastSignedToken;
 }
 
-/** The key to drop into the Decoder: HS secret, else the derived public PEM. */
 export function encoderKeyForDecode(): string {
   const alg = encAlg.value || 'HS256';
   return alg.startsWith('HS') ? encKey.value.trim() : encPubKey.value;
 }
 
-/** Populate the Encoder from a decoded token. Pure state change so it is testable
- *  without a DOM click; the caller switches tabs. Pass { secret, verified }. */
 export function loadIntoEncoder(header: JsonObject, payload: JsonObject, alg: string | null, keyInfo?: KeyInfo): void {
   if (!header || typeof header !== 'object' || Array.isArray(header)) throw new Error('Nothing to send — paste a decodable token first.');
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('The decoded payload is not a JSON object.');
@@ -135,7 +127,6 @@ export function loadIntoEncoder(header: JsonObject, payload: JsonObject, alg: st
   if (alg === 'none') {
     note.textContent = 'Unsigned (alg: none) — no key required.';
   } else if (isHMAC && info.verified && info.secret) {
-    // After encKeyLabelUpdate, which otherwise refills an empty HMAC key with the demo secret.
     encKey.value = info.secret;
     note.textContent = 'Secret carried over from a token the Decoder verified.';
   } else if (isHMAC) {
@@ -151,8 +142,6 @@ export function loadIntoEncoder(header: JsonObject, payload: JsonObject, alg: st
     note.textContent = '';
   }
 }
-
-/* --------------------------------------------------------------- wiring */
 
 encAlg.addEventListener('change', () => {
   encKeyLabelUpdate();
@@ -203,9 +192,7 @@ $.required('#btnCopyPub').addEventListener('click', async () => {
   }
   try {
     await navigator.clipboard.writeText(v);
-  } catch {
-    /* clipboard unavailable; nothing to do */
-  }
+  } catch {}
   const b = $.required('#btnCopyPub');
   const old = b.textContent;
   b.textContent = 'Copied!';

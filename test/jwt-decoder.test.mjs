@@ -1,9 +1,3 @@
-// Runs the JWT tool modules (src/scripts/jwt/) under a minimal DOM shim, round-trips
-// HS/RS/PS/ES, and cross-checks signatures with node:crypto.
-//
-// Everything is imported dynamically *after* the shim is installed (static imports would
-// hoist above it): the entry for its boot + wiring side effects, then the individual
-// modules for the functions under test — no window hook required.
 import fs from "node:fs";
 import crypto from "node:crypto";
 import assert from "node:assert";
@@ -12,7 +6,6 @@ if (!globalThis.crypto?.subtle) {
   throw new Error("Node 20+ is required (global Web Crypto missing)");
 }
 
-/* ------------------------------- DOM shim ------------------------------- */
 const nodes = new Map();
 function mkEl(sel) {
   const el = {
@@ -45,7 +38,6 @@ function mkEl(sel) {
 }
 globalThis.document = {
   querySelector(sel){ if(!nodes.has(sel)) nodes.set(sel, mkEl(sel)); return nodes.get(sel); },
-  // domsure's fast path for bare `#id` selectors goes through getElementById.
   getElementById(id){ return this.querySelector("#" + id); },
   querySelectorAll(){ return []; },
   createElement(){ return mkEl("created"); },
@@ -58,7 +50,6 @@ globalThis.atob = (s) => Buffer.from(s, "base64").toString("latin1");
 try { globalThis.navigator = { clipboard: { writeText: async () => {} } }; }
 catch { Object.defineProperty(globalThis, "navigator", { value: { clipboard: { writeText: async () => {} } }, configurable: true }); }
 
-// Execute the tool now that the DOM shim exists, then collect the modules under test.
 await import("../src/scripts/jwt/jwt-tool.ts");
 const api = {
   ...(await import("../src/scripts/jwt/jwt-crypto.ts")),
@@ -67,7 +58,6 @@ const api = {
   ...(await import("../src/scripts/jwt/jwt-encoder.ts")),
 };
 
-/* ------------------------------- helpers -------------------------------- */
 const encSel = globalThis.document.querySelector("#encAlg");
 const encKey = globalThis.document.querySelector("#encKey");
 const encHeader = globalThis.document.querySelector("#encHeader");
@@ -85,7 +75,6 @@ function parts(t){ const [h,p,s] = t.split("."); return { h, p, s, data: h + "."
 let pass = 0;
 function ok(name){ pass++; console.log("  PASS  " + name); }
 
-/* ------------------------------ 1. HS256/384/512 ------------------------ */
 for (const [alg, hash] of [["HS256","sha256"],["HS384","sha384"],["HS512","sha512"]]) {
   const secret = "a-string-secret-at-least-256-bits-long";
   const t = await sign(alg, secret, { typ: "JWT" }, { sub: "1234567890", name: "Jöhn Döe — ünïcode ✓", iat: 1516239022 });
@@ -100,7 +89,6 @@ for (const [alg, hash] of [["HS256","sha256"],["HS384","sha384"],["HS512","sha51
   ok(alg + " matches node:crypto HMAC + UTF-8 round-trip");
 }
 
-/* ------------------------------ 2. RSA / PS ----------------------------- */
 for (const [alg, hash, padding] of [["RS256","sha256",crypto.constants.RSA_PKCS1_PADDING],["PS256","sha256",crypto.constants.RSA_PKCS1_PSS_PADDING]]) {
   const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
   const privPem = privateKey.export({ type: "pkcs8", format: "pem" });
@@ -117,20 +105,17 @@ for (const [alg, hash, padding] of [["RS256","sha256",crypto.constants.RSA_PKCS1
   ok(alg + " verified by node:crypto public key");
 }
 
-/* ------------------------------ 3. ECDSA -------------------------------- */
 for (const [alg, hash, curve] of [["ES256","sha256","P-256"],["ES384","sha384","P-384"],["ES512","sha512","P-521"]]) {
   const { privateKey, publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: curve });
   const privPem = privateKey.export({ type: "pkcs8", format: "pem" });
   const t = await sign(alg, privPem, { typ: "JWT" }, { sub: "abc" });
   const { s, data } = parts(t);
-  // JWS uses raw r||s; tell node so it doesn't expect DER
   const v = crypto.verify(hash, Buffer.from(data), { key: publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(s, "base64url"));
   assert.strictEqual(v, true, alg + " verify failed");
   assert.strictEqual(Buffer.from(s, "base64url").length, 2 * (curve === "P-256" ? 32 : curve === "P-384" ? 48 : 66), alg + " raw r||s length");
   ok(alg + " verified by node:crypto (raw r||s, " + curve + ")");
 }
 
-/* ------- 4. decoder-side verification path (public PEM + secret) -------- */
 for (const [alg, kind, curve] of [["ES256","ec","P-256"],["ES384","ec","P-384"],["ES512","ec","P-521"],["RS256","rsa",null],["PS512","rsa",null]]) {
   const { privateKey, publicKey } = kind === "rsa"
     ? crypto.generateKeyPairSync("rsa", { modulusLength: 2048 })
@@ -151,14 +136,13 @@ for (const [alg, kind, curve] of [["ES256","ec","P-256"],["ES384","ec","P-384"],
   ok(alg + " decoder verify path: accept + reject-wrong + reject-tampered + round-trip");
 }
 
-/* ------- 5. wrong secret for HMAC must fail --------------------------------- */ {
+{
   const t = await sign("HS256", "right-secret", { typ: "JWT" }, { sub: "x" });
   assert.strictEqual(await api.verifyTokenWithKey(t, "HS256", "right-secret"), true);
   assert.strictEqual(await api.verifyTokenWithKey(t, "HS256", "wrong-secret"), false);
   ok("HS256 rejects a wrong secret");
 }
 
-/* ------------------------- 6. demo token decodes ------------------------ */
 const DEMO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30";
 const d = parts(DEMO);
 const demoHeader = JSON.parse(Buffer.from(d.h, "base64url").toString());
@@ -169,10 +153,6 @@ const demoExpect = crypto.createHmac("sha256", "a-string-secret-at-least-256-bit
 assert.strictEqual(d.s, demoExpect, "demo token signature must match the prefilled secret");
 ok("prefilled demo token verifies with the prefilled secret in the UI");
 
-/* ------------------- 7. Astro markup wires the same ids ----------------- */
-// The app is injected via innerHTML for badges/claims/panes; every id the script looks
-// up from the static markup must exist, or the tool silently no-ops. Markup lives in the
-// page plus the tool components; the script may be one file or a folder of modules.
 function readAll(dir, ext) {
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -189,17 +169,14 @@ const markup = [
 const script = readAll(new URL("../src/scripts/", import.meta.url), ".ts").join("\n");
 const staticIds = new Set([...markup.matchAll(/\bid="([^"]+)"/g)].map((x) => x[1]));
 const referenced = new Set([...script.matchAll(/["']#([A-Za-z0-9_-]+)["']/g)].map((x) => x[1]));
-// sigBadge is created at runtime inside #statusRow, so it is legitimately absent.
 referenced.delete("sigBadge");
 const missing = [...referenced].filter((id) => !staticIds.has(id));
 assert.deepStrictEqual(missing, [], "ids referenced by JS but missing from markup: " + missing.join(", "));
 ok("every statically referenced DOM id exists in the markup");
 
-// The build hook in astro.config.mjs keys its one-script budget off this marker.
 assert.ok(markup.includes("data-tool-mount"), "tool page must keep its data-tool-mount marker");
 ok("tool page declares data-tool-mount for the build's script budget");
 
-/* ------------------- 8. JSON viewer ------------------------------------- */
 const { CLS } = await import("../src/scripts/jwt/jwt-ui.ts");
 const tree = api.jsonTreeView({
   evil: '<img src=x onerror=alert(1)>',
@@ -217,13 +194,10 @@ for (const cls of [CLS.jtKey, CLS.jtStr, CLS.jtNum, CLS.jtBool, CLS.jtNull, CLS.
 assert.ok(tree.includes("<details"), "nested objects should be collapsible");
 assert.ok(api.jsonTreeView({}).includes("{}"), "empty object should render {}");
 assert.ok(api.jsonTreeView([]).includes("[]"), "empty array should render []");
-// "styling only Tailwind": the runtime-generated markup must carry no inline styles or
-// hand-rolled CSS variables — only class utilities.
 assert.strictEqual(tree.includes("style="), false, "generated tree must not use inline styles");
 assert.strictEqual(tree.includes("var(--"), false, "generated tree must not use custom CSS vars");
 ok("JSON tree viewer escapes input, colours types and collapses objects");
 
-/* ------------------- 8b. claims breakdown ------------------------------ */
 const claims = api.claimsPane({ sub: "1234567890", iat: 1516239022 }, false);
 const tdCount = (claims.match(/<td /g) ?? []).length;
 assert.strictEqual(tdCount, 6, "two claims should render six cells (3 columns each)");
@@ -235,9 +209,7 @@ assert.strictEqual(
 assert.ok(claims.includes(CLS.claimsTh), "claims header cells must carry the header class");
 ok("claims breakdown builds a padded, bordered table");
 
-/* ------------------- 8c. JSON validity check --------------------------- */
 assert.strictEqual(api.jsonError('   '), null, "blank input is not an error");
-// Parity with JSON.parse, including unescaped control characters in strings.
 const validJson = ['{"a":1}', '[]', '{}', '[1,2,3]', 'true', 'null', '"x"', '-0.5e-3', '{"a":{"b":[1,{"c":true}]}}', '{"s":"a\\"b\\u00e9"}'];
 const badJsonSet = ['{', '{"a": }', '{"a":1,}', '[1,2,]', '{"a" 1}', '{"a":1', '{"a":"\\q"}', 'nul', '{"a":01}', '1 2', '"a\tb"', '"a\u0001b"', '"a\u001fb"'];
 for (const s of validJson) {
@@ -253,7 +225,6 @@ assert.ok(located && /Line 2, column 7/.test(located), "error must locate line/c
 assert.ok(!located.includes('is not valid JSON'), "engine noise must be stripped: " + located);
 ok("jsonError matches JSON.parse and rewords its error");
 
-/* --------------- 9. decoder panes render the tree ----------------------- */
 const tokEl = globalThis.document.querySelector("#tokInput");
 const statusEl = globalThis.document.querySelector("#statusRow");
 const headerEl = globalThis.document.querySelector("#headerBody");
@@ -266,7 +237,6 @@ api.decodeToken();
 assert.strictEqual(headerEl.dataset.jwtKey, firstKey, "unchanged JSON should not re-render (keeps collapse state)");
 ok("decoder panes use the cached JSON tree view");
 
-/* --------------- 10. alg: none (unsecured JWT) -------------------------- */
 {
   const t = await sign("none", "ignored", { typ: "JWT" }, { sub: "unsigned" });
   const p = parts(t);
@@ -279,7 +249,6 @@ ok("decoder panes use the cached JSON tree view");
   ok("alg: none signs an unsigned token and the decoder flags it");
 }
 
-/* -------- 11. decoder → encoder carries only a verified secret ---------- */
 const encKeyEl = globalThis.document.querySelector("#encKey");
 const encAlgEl = globalThis.document.querySelector("#encAlg");
 api.loadIntoEncoder({ alg: "HS256", typ: "JWT" }, { sub: "a" }, "HS256", { secret: "s3cr3t", verified: true });
@@ -292,5 +261,18 @@ api.loadIntoEncoder({ alg: "none" }, { sub: "c" }, "none", {});
 assert.strictEqual(encAlgEl.value, "none", "none should be selectable in the encoder");
 assert.ok(globalThis.document.querySelector("#encKeyState").textContent.includes("alg: none"));
 ok("decoder→encoder hands over header/payload and only a verified secret");
+
+{
+  api.loadIntoEncoder({ alg: "HS256", typ: "JWT" }, { sub: "first" }, "HS256", { secret: "s3cr3t", verified: true });
+  await api.tokenForHandoff();
+  globalThis.document.querySelector("#encPayload").value = JSON.stringify({ sub: "second" });
+  const t = await api.tokenForHandoff();
+  assert.strictEqual(
+    JSON.parse(Buffer.from(parts(t).p, "base64url").toString()).sub,
+    "second",
+    "a payload-only edit must be re-signed, not silently dropped",
+  );
+  ok("handoff re-signs after a payload-only edit");
+}
 
 console.log("\n" + pass + " checks passed");

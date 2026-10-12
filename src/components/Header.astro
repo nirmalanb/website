@@ -7,7 +7,6 @@ const NAV = [
   { href: '#contact', label: 'Contact' },
 ];
 
-// Anchor links only resolve on the home page; from guide pages, point back at /.
 const base = Astro.url.pathname === '/' ? '' : '/';
 const href = (h: string) => (h.startsWith('#') ? `${base}${h}` : h);
 ---

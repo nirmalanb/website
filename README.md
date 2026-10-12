@@ -1,6 +1,6 @@
 # Nirmala NB — Cyber Security
 
-One-page professional site plus an MDX guide section for a cyber security engineer, built with **Astro 7** and **Tailwind CSS v4**. No client-side framework; the core page ships no JavaScript (~14 KB HTML, one stylesheet). Guide pages lazily render Mermaid diagrams client-side; everything else, including syntax-highlighted code blocks, is build-time HTML/CSS. The Mermaid integration injects its client module into every page, so a build hook in `astro.config.mjs` strips it back off every page without a diagram — and enforces a one-script budget on pages marked `data-search-mount`, failing the build if anything unexpected turns up.
+One-page professional site plus an MDX guide section for a cyber security engineer, built with **Astro 7** and **Tailwind CSS v4**. No client-side framework; the core page ships no JavaScript (~14 KB HTML, one stylesheet). Guide pages lazily render Mermaid diagrams client-side; everything else, including syntax-highlighted code blocks, is build-time HTML/CSS. The Mermaid integration injects its client module into every page, so a build hook in `astro.config.mjs` removes it from every page without a diagram — detecting the client chunk by its content, not its filename — and enforces a one-script budget on tool/search pages, failing the build if anything unexpected turns up.
 
 ## Stack
 
@@ -87,9 +87,16 @@ Both are loaded from Google Fonts. To change the pairing, edit the `<link>` in `
 pnpm install
 pnpm dev        # http://localhost:4321
 pnpm build      # static output in dist/
+pnpm check      # astro check (types + diagnostics), 0 errors required
 pnpm test       # JWT tool crypto round-trips (node:crypto cross-check)
 pnpm preview    # serve dist/
 ```
+
+CI (`.github/workflows/ci.yml`) runs `check`, `test` and `build` on every push and PR; the build
+step also enforces the page script budget. Node is pinned via `.nvmrc` / `engines` (≥ 22.18 — the
+floor where Node strips TypeScript by default, which `pnpm test` needs for its direct `.ts` imports).
+`public/_headers` ships a `Content-Security-Policy` (with `frame-ancestors 'none'`) plus the usual
+security headers to Cloudflare Pages.
 
 ## Structure
 

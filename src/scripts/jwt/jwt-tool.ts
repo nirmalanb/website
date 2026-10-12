@@ -1,8 +1,3 @@
-/**
- * Entry point: tab switching, the two cross-panel buttons (Decoder → Encoder and
- * Encoder → Decoder), and boot. Panels own their own DOM.
- */
-
 import { $ } from 'domsure';
 import { CLS } from './jwt-ui.ts';
 import { esc } from './jwt-view.ts';
@@ -22,6 +17,8 @@ function setTab(which: 'decode' | 'encode'): void {
   enc.classList.toggle('active', !isDecode);
   dec.setAttribute('aria-selected', String(isDecode));
   enc.setAttribute('aria-selected', String(!isDecode));
+  dec.tabIndex = isDecode ? 0 : -1;
+  enc.tabIndex = isDecode ? -1 : 0;
   $.required('#viewDecode').classList.toggle('hidden', !isDecode);
   $.required('#viewEncode').classList.toggle('hidden', isDecode);
   if (isDecode) decodeToken();
@@ -30,9 +27,14 @@ function setTab(which: 'decode' | 'encode'): void {
 $.required('#tabDecode').addEventListener('click', () => setTab('decode'));
 $.required('#tabEncode').addEventListener('click', () => setTab('encode'));
 
-// Decoder → Encoder. The secret is carried only when the Decoder verified the
-// original token with it — carrying the prefilled demo secret would silently
-// re-sign an edited payload with the wrong key.
+$.required('#toolTabs').addEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
+  e.preventDefault();
+  const next = e.key === 'ArrowLeft' || e.key === 'Home' ? 'decode' : 'encode';
+  setTab(next);
+  $.required(next === 'decode' ? '#tabDecode' : '#tabEncode').focus();
+});
+
 $.required('#btnDecodeToEncode').addEventListener('click', () => {
   const decMsg = $.required('#decMsg');
   try {
@@ -50,7 +52,6 @@ $.required('#btnDecodeToEncode').addEventListener('click', () => {
   }
 });
 
-// Encoder → Decoder: hand over the signed token plus its key.
 $.required('#btnSendDecode').addEventListener('click', async () => {
   try {
     loadToken(await tokenForHandoff(), encoderKeyForDecode());

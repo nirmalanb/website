@@ -4,10 +4,14 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@12.8.1",
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
+    "check": "astro check",
     "test": "node test/jwt-decoder.test.mjs",
     "astro": "astro"
   },
