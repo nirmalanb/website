@@ -31,9 +31,12 @@ import { profile, contactLinks } from '../data/resume';
         }
       </ul>
 
-      <p class="mt-8 border-t border-white/10 pt-4 text-sm text-fog/70">
-        © {new Date().getFullYear()} {profile.name}, {profile.location}
-      </p>
+      <div
+        class="mt-8 flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1 border-t border-white/10 pt-4 text-sm text-fog/70"
+      >
+        <p>© {new Date().getFullYear()} {profile.name}. All rights reserved.</p>
+        <a href="/tools/jwt-decoder/" class="link-mint">JWT debugger</a>
+      </div>
     </div>
   </div>
 </footer>

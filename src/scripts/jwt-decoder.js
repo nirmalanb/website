@@ -484,7 +484,8 @@ $("#btnSendDecode").addEventListener("click", async ()=>{
       secretInput.value = key;
       secretInput.dispatchEvent(new Event("input"));
     }
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const reduce = window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
+    window.scrollTo({ top: 0, behavior: reduce ? "smooth" : "auto" });
   } catch(e){
     encMsg.innerHTML = '<div class="err">' + esc(e.message) + "</div>";
   }
@@ -532,8 +533,11 @@ $("#tabDecode").addEventListener("click", ()=>{ setTab("decode"); });
 $("#tabEncode").addEventListener("click", ()=>{ setTab("encode"); });
 function setTab(which){
   const isDecode = which === "decode";
-  $("#tabDecode").classList.toggle("active", isDecode);
-  $("#tabEncode").classList.toggle("active", !isDecode);
+  const dec = $("#tabDecode"), enc = $("#tabEncode");
+  dec.classList.toggle("active", isDecode);
+  enc.classList.toggle("active", !isDecode);
+  dec.setAttribute("aria-selected", String(isDecode));
+  enc.setAttribute("aria-selected", String(!isDecode));
   $("#viewDecode").classList.toggle("hidden", !isDecode);
   $("#viewEncode").classList.toggle("hidden", isDecode);
   if (isDecode) decodeToken();
