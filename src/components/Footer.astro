@@ -3,7 +3,7 @@ import { profile, contactLinks } from '../data/resume';
 ---
 
 <footer id="contact" class="scroll-mt-16">
-  <div class="mx-auto max-w-2xl px-6 pb-12">
+  <div class="mx-auto max-w-2xl px-6">
     <div class="rounded-2xl bg-deep px-6 py-8 sm:px-8 sm:py-9">
       <h2 class="text-lg text-white">Contact</h2>
 
@@ -30,13 +30,15 @@ import { profile, contactLinks } from '../data/resume';
           ))
         }
       </ul>
+    </div>
+  </div>
 
-      <div
-        class="mt-8 flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1 border-t border-white/10 pt-4 text-sm text-fog/70"
-      >
-        <p>© {new Date().getFullYear()} {profile.name}. All rights reserved.</p>
-        <a href="/tools/jwt-decoder/" class="link-mint">JWT debugger</a>
-      </div>
+  <div class="mx-auto max-w-2xl px-6">
+    <div
+      class="mt-8 flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1 border-t border-rule pt-5 pb-12 text-sm text-mute"
+    >
+      <p>© {new Date().getFullYear()} {profile.name}. All rights reserved.</p>
+      <a href="/tools/jwt-decoder/" class="link">JWT debugger</a>
     </div>
   </div>
 </footer>
