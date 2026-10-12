@@ -44,8 +44,10 @@ function stripMermaidScript() {
 
           const next = html.replace(MODULE, '');
           // /guides/ opts into one script for guide search via the data-search-mount
-          // marker. Every other diagram-less page still ships none.
-          const scriptBudget = next.includes('data-search-mount') ? 1 : 0;
+          // marker; the JWT tool page opts into one for its own app via data-tool-mount.
+          // Every other diagram-less page still ships none.
+          const isToolPage = next.includes('data-tool-mount');
+          const scriptBudget = next.includes('data-search-mount') || isToolPage ? 1 : 0;
           // JSON-LD blocks are inert data, not executable JavaScript. The zero-JS
           // guarantee in PRODUCT.md is about runtime scripts, so they don't count.
           const EXECUTABLE_SCRIPT = /<script\b(?![^>]*type="application\/ld\+json")/gi;
@@ -54,6 +56,15 @@ function stripMermaidScript() {
             throw new Error(
               `${file} ships ${scriptCount} script(s), budget is ${scriptBudget}. ` +
                 'Update the strip-mermaid-script integration in astro.config.mjs before shipping it.',
+            );
+          }
+          // A tool page must keep exactly its own bundle. MODULE targets /_astro/page.*.js,
+          // which is the Mermaid injectScript chunk today; if Astro ever renames the tool
+          // page's bundle to match, the strip above would silently delete the app.
+          if (isToolPage && scriptCount !== 1) {
+            throw new Error(
+              `${file} is a data-tool-mount page but ships ${scriptCount} script(s); expected exactly 1. ` +
+                'Check whether its bundle was named /_astro/page.*.js and stripped by MODULE.',
             );
           }
           if (next === html) continue;

@@ -19,6 +19,8 @@ The header says how the token was created. It usually includes `typ: JWT` and `a
 
 The payload carries claims about the subject and the token. Registered claims include `sub` for subject, `iat` for issued at, `exp` for expiration, and `aud` for audience. You can add public or private claims, but anyone can decode them, so keep sensitive data out. The signature protects integrity and authenticity. The server recomputes it and rejects the token if anything changed.
 
+You can watch all three parts decode by hand in the [JWT debugger](/tools/jwt-decoder/) — it runs entirely in the browser, including signature verification with the secret or public key.
+
 A common JWT lifecycle starts after login. The auth server issues a token with the needed claims and an expiration. Clients store it in memory, cookies, or localStorage, each with trade-offs. Cookies auto attach to requests, convenient but open to CSRF without `SameSite` and anti-CSRF measures. Sending tokens in the Authorization header avoids CSRF, but it puts more work on the client.
 
 On the server, verify the signature with the secret or public key. Then check claims like `exp` and `nbf` before trusting the request. Small clock skews happen, so allow a small leeway. When `exp` passes, the token is dead. You need to reauthenticate or use a refresh token. OAuth 2.0 defines refresh tokens and ways to get new access tokens without pestering users.

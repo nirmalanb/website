@@ -1,0 +1,181 @@
+// Runs the shipped JWT tool script (src/scripts/jwt-decoder.js) under a minimal DOM
+// shim, round-trips HS/RS/PS/ES, and cross-checks signatures with node:crypto.
+//
+// The script is a side-effect-only IIFE exposing window.__jwtDebugger, so it is imported
+// dynamically *after* the shim is installed (static imports would hoist above the shim).
+import fs from "node:fs";
+import crypto from "node:crypto";
+import assert from "node:assert";
+
+if (!globalThis.crypto?.subtle) {
+  throw new Error("Node 20+ is required (global Web Crypto missing)");
+}
+
+/* ------------------------------- DOM shim ------------------------------- */
+const nodes = new Map();
+function mkEl(sel) {
+  const el = {
+    _sel: sel,
+    value: sel === "#encAlg" ? "HS256" : "",
+    textContent: "",
+    innerHTML: "",
+    placeholder: "",
+    dataset: {},
+    style: {},
+    scrollTop: 0,
+    scrollLeft: 0,
+    selectionStart: 0,
+    selectionEnd: 0,
+    classList: { toggle(){}, add(){}, remove(){}, contains(){ return false; } },
+    addEventListener(){},
+    removeEventListener(){},
+    appendChild(){},
+    remove(){},
+    querySelector(){ return mkEl(sel + " > *"); },
+    querySelectorAll(){ return []; },
+    closest(){ return null; },
+    focus(){},
+    select(){},
+    getAttribute(){ return null; },
+  };
+  return el;
+}
+globalThis.document = {
+  querySelector(sel){ if(!nodes.has(sel)) nodes.set(sel, mkEl(sel)); return nodes.get(sel); },
+  querySelectorAll(){ return []; },
+  createElement(){ return mkEl("created"); },
+  body: { appendChild(){} },
+  execCommand(){},
+};
+globalThis.window = globalThis;
+globalThis.btoa = (s) => Buffer.from(s, "latin1").toString("base64");
+globalThis.atob = (s) => Buffer.from(s, "base64").toString("latin1");
+try { globalThis.navigator = { clipboard: { writeText: async () => {} } }; }
+catch { Object.defineProperty(globalThis, "navigator", { value: { clipboard: { writeText: async () => {} } }, configurable: true }); }
+
+// Execute the shipped script now that the DOM shim exists.
+await import("../src/scripts/jwt-decoder.js");
+
+const api = globalThis.__jwtDebugger;
+assert(api, "__jwtDebugger hook missing");
+
+/* ------------------------------- helpers -------------------------------- */
+const encSel = globalThis.document.querySelector("#encAlg");
+const encKey = globalThis.document.querySelector("#encKey");
+const encHeader = globalThis.document.querySelector("#encHeader");
+const encPayload = globalThis.document.querySelector("#encPayload");
+
+async function sign(alg, keyPem, header, payload) {
+  encSel.value = alg;
+  encKey.value = keyPem;
+  encHeader.value = JSON.stringify(header);
+  encPayload.value = JSON.stringify(payload);
+  return api.signToken();
+}
+function parts(t){ const [h,p,s] = t.split("."); return { h, p, s, data: h + "." + p }; }
+
+let pass = 0;
+function ok(name){ pass++; console.log("  PASS  " + name); }
+
+/* ------------------------------ 1. HS256/384/512 ------------------------ */
+for (const [alg, hash] of [["HS256","sha256"],["HS384","sha384"],["HS512","sha512"]]) {
+  const secret = "a-string-secret-at-least-256-bits-long";
+  const t = await sign(alg, secret, { typ: "JWT" }, { sub: "1234567890", name: "Jöhn Döe — ünïcode ✓", iat: 1516239022 });
+  const { s, data } = parts(t);
+  const expect = crypto.createHmac(hash, secret).update(data).digest("base64url");
+  assert.strictEqual(s, expect, alg + " signature mismatch");
+  assert.strictEqual(s.includes("="), false, alg + " must be unpadded");
+  const hdr = JSON.parse(Buffer.from(parts(t).h, "base64url").toString());
+  const pld = JSON.parse(Buffer.from(parts(t).p, "base64url").toString());
+  assert.strictEqual(hdr.alg, alg);
+  assert.strictEqual(pld.name, "Jöhn Döe — ünïcode ✓", alg + " UTF-8 round-trip");
+  ok(alg + " matches node:crypto HMAC + UTF-8 round-trip");
+}
+
+/* ------------------------------ 2. RSA / PS ----------------------------- */
+for (const [alg, hash, padding] of [["RS256","sha256",crypto.constants.RSA_PKCS1_PADDING],["PS256","sha256",crypto.constants.RSA_PKCS1_PSS_PADDING]]) {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const privPem = privateKey.export({ type: "pkcs8", format: "pem" });
+  const pubPem = publicKey.export({ type: "spki", format: "pem" });
+  const t = await sign(alg, privPem, { typ: "JWT" }, { sub: "abc", iat: 1700000000 });
+  const { s, data } = parts(t);
+  const v = crypto.verify(hash, Buffer.from(data), {
+    key: publicKey,
+    padding,
+    ...(padding === crypto.constants.RSA_PKCS1_PSS_PADDING ? { saltLength: 32 } : {}),
+  }, Buffer.from(s, "base64url"));
+  assert.strictEqual(v, true, alg + " verify failed");
+  assert.strictEqual(pubPem.includes("BEGIN PUBLIC KEY"), true);
+  ok(alg + " verified by node:crypto public key");
+}
+
+/* ------------------------------ 3. ECDSA -------------------------------- */
+for (const [alg, hash, curve] of [["ES256","sha256","P-256"],["ES384","sha384","P-384"],["ES512","sha512","P-521"]]) {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: curve });
+  const privPem = privateKey.export({ type: "pkcs8", format: "pem" });
+  const t = await sign(alg, privPem, { typ: "JWT" }, { sub: "abc" });
+  const { s, data } = parts(t);
+  // JWS uses raw r||s; tell node so it doesn't expect DER
+  const v = crypto.verify(hash, Buffer.from(data), { key: publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(s, "base64url"));
+  assert.strictEqual(v, true, alg + " verify failed");
+  assert.strictEqual(Buffer.from(s, "base64url").length, 2 * (curve === "P-256" ? 32 : curve === "P-384" ? 48 : 66), alg + " raw r||s length");
+  ok(alg + " verified by node:crypto (raw r||s, " + curve + ")");
+}
+
+/* ------- 4. decoder-side verification path (public PEM + secret) -------- */
+for (const [alg, kind, curve] of [["ES256","ec","P-256"],["ES384","ec","P-384"],["ES512","ec","P-521"],["RS256","rsa",null],["PS512","rsa",null]]) {
+  const { privateKey, publicKey } = kind === "rsa"
+    ? crypto.generateKeyPairSync("rsa", { modulusLength: 2048 })
+    : crypto.generateKeyPairSync("ec", { namedCurve: curve });
+  const privPem = privateKey.export({ type: "pkcs8", format: "pem" });
+  const pubPem = publicKey.export({ type: "spki", format: "pem" });
+  const t = await sign(alg, privPem, { typ: "JWT" }, { sub: "verifier" });
+
+  assert.strictEqual(await api.verifyTokenWithKey(t, alg, pubPem), true, alg + " verifyTokenWithKey(publicPem)");
+  const wrong = kind === "rsa" ? crypto.generateKeyPairSync("rsa", { modulusLength: 2048 }) : crypto.generateKeyPairSync("ec", { namedCurve: curve });
+  assert.strictEqual(await api.verifyTokenWithKey(t, alg, wrong.publicKey.export({ type: "spki", format: "pem" })), false, alg + " must reject wrong key");
+  const tp = parts(t);
+  const tampered = tp.h + "." + Buffer.from(JSON.stringify({ sub: "evil" })).toString("base64url") + "." + tp.s;
+  assert.strictEqual(await api.verifyTokenWithKey(tampered, alg, pubPem), false, alg + " must reject tampered payload");
+  assert.strictEqual(await api.roundTripVerify(t, alg, privPem), true, alg + " roundTripVerify");
+  const derived = await api.publicKeyFromPrivatePem(alg, privPem);
+  assert.strictEqual(derived.replace(/\s+/g, ""), pubPem.replace(/\s+/g, ""), alg + " derived public key mismatch");
+  ok(alg + " decoder verify path: accept + reject-wrong + reject-tampered + round-trip");
+}
+
+/* ------- 5. wrong secret for HMAC must fail --------------------------------- */ {
+  const t = await sign("HS256", "right-secret", { typ: "JWT" }, { sub: "x" });
+  assert.strictEqual(await api.verifyTokenWithKey(t, "HS256", "right-secret"), true);
+  assert.strictEqual(await api.verifyTokenWithKey(t, "HS256", "wrong-secret"), false);
+  ok("HS256 rejects a wrong secret");
+}
+
+/* ------------------------- 6. demo token decodes ------------------------ */
+const DEMO = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30";
+const d = parts(DEMO);
+const demoHeader = JSON.parse(Buffer.from(d.h, "base64url").toString());
+const demoPayload = JSON.parse(Buffer.from(d.p, "base64url").toString());
+assert.deepStrictEqual(demoHeader, { alg: "HS256", typ: "JWT" });
+assert.strictEqual(demoPayload.name, "John Doe");
+const demoExpect = crypto.createHmac("sha256", "a-string-secret-at-least-256-bits-long").update(d.data).digest("base64url");
+assert.strictEqual(d.s, demoExpect, "demo token signature must match the prefilled secret");
+ok("prefilled demo token verifies with the prefilled secret in the UI");
+
+/* ------------------- 7. Astro page wires the same ids ------------------- */
+// The app is injected via innerHTML for badges/claims/panes; every id the script looks
+// up from the static markup must exist in the .astro page, or the tool silently no-ops.
+const astro = fs.readFileSync(new URL("../src/pages/tools/jwt-decoder.astro", import.meta.url), "utf8");
+const script = fs.readFileSync(new URL("../src/scripts/jwt-decoder.js", import.meta.url), "utf8");
+const staticIds = new Set([...astro.matchAll(/\bid="([^"]+)"/g)].map((x) => x[1]));
+const referenced = new Set([...script.matchAll(/\$\("#([A-Za-z0-9_-]+)"\)/g)].map((x) => x[1]));
+// sigBadge is created at runtime inside #statusRow, so it is legitimately absent.
+referenced.delete("sigBadge");
+const missing = [...referenced].filter((id) => !staticIds.has(id));
+assert.deepStrictEqual(missing, [], "ids referenced by JS but missing from the .astro page: " + missing.join(", "));
+ok("every statically referenced DOM id exists in the .astro markup");
+
+// The build hook in astro.config.mjs keys its one-script budget off this marker.
+assert.ok(astro.includes("data-tool-mount"), "tool page must keep its data-tool-mount marker");
+ok("tool page declares data-tool-mount for the build's script budget");
+
+console.log("\n" + pass + " checks passed");
