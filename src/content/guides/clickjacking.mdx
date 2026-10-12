@@ -11,11 +11,11 @@ tags:
   - OWASP
 ---
 
-Clickjacking is a UI redressing attack. The attacker loads your page in a transparent iframe, stacks their own content on top, and aligns the layers so a click the user thinks is harmless lands on a real button on your page. The click carries the user's session. From your server's point of view, it looks exactly like the user meant it.
+Clickjacking is a UI redressing attack. The attacker loads your page in a transparent iframe, stacks their own content on top, and lines the layers up so a click the user thinks is harmless lands on a real button on your page. That click carries the user's session. From your server's side, it looks exactly like the user meant it.
 
 ## The Attack, Step by Step
 
-The user visits the attacker's page, sees something ordinary (a quiz, a video, a "claim your prize" button), and clicks. The click passes through the invisible layer and hits your transfer button, delete button, or grant-permissions dialog instead.
+The user visits the attacker's page, sees something ordinary (a quiz, a video, a "claim your prize" button), and clicks. The click passes through the invisible layer and lands on your transfer button, your delete button, or a grant-permissions dialog instead.
 
 ```mermaid
 graph LR
@@ -28,13 +28,11 @@ graph LR
 
 ## Why It Works
 
-- Browsers render any page in an iframe by default. Framing a page is not blocked by the same-origin policy; only scripting across the frame boundary is.
-- The click arrives with the user's cookies attached. Your server cannot tell that the click came from a framed page rather than the page you shipped.
-- No data leaves the browser and nothing is "hacked". The user did everything themselves, one layer at a time. That's what makes it hard to detect in logs.
+Browsers render any page in an iframe by default. Framing a page is not blocked by the same-origin policy; only scripting across the frame boundary is. The click arrives with the user's cookies attached, so your server can't tell it came from a framed page rather than the page you shipped. Nothing leaves the browser and nothing is "hacked". The user did everything themselves, one layer at a time, which is what makes it hard to spot in logs.
 
 ## Catching It in the Browser
 
-Framing is detectable client-side. `window.self !== window.top` is true whenever a page is framed, and both properties are readable even cross-origin, so it works no matter who did the framing.
+Framing is detectable client-side. `window.self !== window.top` is true whenever a page is framed, and both properties stay readable even cross-origin, so it works no matter who did the framing.
 
 I keep a small guard script for exactly this in my PoC repo:
 
@@ -68,14 +66,14 @@ If you load the guard from a CDN, pin it to a commit. And don't use the raw GitH
 
 ## The Real Fix Is a Response Header
 
-Client-side detection is best-effort. An attacker who controls the framing page can strip your script (by intercepting it) or neutralize it (with `<iframe sandbox>` and no `allow-scripts`), and the guard never runs. The robust fix never reaches the attacker's hands: the browser refuses to render your page in a frame at all.
+Client-side detection is best-effort. An attacker who controls the framing page can strip your script by intercepting it, or neutralize it with `<iframe sandbox>` and no `allow-scripts`, and then the guard never runs. The robust fix never reaches the attacker's hands: the browser refuses to render your page in a frame at all.
 
 ```
 Content-Security-Policy: frame-ancestors 'none'
 X-Frame-Options: DENY
 ```
 
-CSP `frame-ancestors` is the modern directive; `X-Frame-Options` covers older browsers. Send both, they cost nothing.
+CSP `frame-ancestors` is the modern directive. `X-Frame-Options` covers older browsers. Send both. They cost nothing.
 
 ```mermaid
 graph TD
@@ -106,7 +104,7 @@ Setting this in a Vercel deploy looks like:
 
 ## Test It Yourself
 
-Don't trust the header, check it.
+Don't trust the header. Check it.
 
 - **Stand-alone checker** (no external JS, works from a plain static host): [cj-deploy.vercel.app/clickjacking/clickjacking-test.html](https://cj-deploy.vercel.app/clickjacking/clickjacking-test.html). Append `?url=https://your-site.example` to test a target directly.
 - **Demo lab**: [cj-lab-sand.vercel.app](https://cj-lab-sand.vercel.app) embeds two pages side by side. One is intentionally framable; one sends `X-Frame-Options: DENY` and `CSP: frame-ancestors 'none'` and stays blank in a frame. The difference is the whole lesson.
