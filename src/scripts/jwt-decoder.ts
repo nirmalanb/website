@@ -1,3 +1,5 @@
+import { CLS, TREE_PL } from "./jwt-ui.ts";
+
 (function(){
 "use strict";
 
@@ -165,42 +167,42 @@ function relTime(sec: number): string {
   return "just now";
 }
 function jtPrimitive(v: unknown): string {
-  if (v === null) return '<span class="jt-null">null</span>';
+  if (v === null) return '<span class="' + CLS.jtNull + '">null</span>';
   const t = typeof v;
-  if (t === "number") return '<span class="jt-num">' + esc(String(v)) + '</span>';
-  if (t === "boolean") return '<span class="jt-bool">' + String(v) + '</span>';
-  if (t === "string") return '<span class="jt-str">' + esc(JSON.stringify(v)) + '</span>';
-  return '<span class="jt-null">' + esc(String(v)) + '</span>';
+  if (t === "number") return '<span class="' + CLS.jtNum + '">' + esc(String(v)) + '</span>';
+  if (t === "boolean") return '<span class="' + CLS.jtBool + '">' + String(v) + '</span>';
+  if (t === "string") return '<span class="' + CLS.jtStr + '">' + esc(JSON.stringify(v)) + '</span>';
+  return '<span class="' + CLS.jtNull + '">' + esc(String(v)) + '</span>';
 }
 function jtKey(key: string | null, isIndex: boolean): string {
   if (key === null) return "";
   return isIndex
-    ? '<span class="jt-idx">' + esc(key) + '</span><span class="jt-punct">: </span>'
-    : '<span class="jt-key">' + esc(JSON.stringify(key)) + '</span><span class="jt-punct">: </span>';
+    ? '<span class="' + CLS.jtIdx + '">' + esc(key) + '</span><span class="' + CLS.jtPunct + '">: </span>'
+    : '<span class="' + CLS.jtKey + '">' + esc(JSON.stringify(key)) + '</span><span class="' + CLS.jtPunct + '">: </span>';
 }
 function jtNode(value: unknown, key: string | null, depth: number, isIndex: boolean): string {
-  const pad = "padding-left:" + depth * 14 + "px";
+  const line = CLS.jtLine + " " + TREE_PL[Math.min(depth, TREE_PL.length - 1)];
   const head = jtKey(key, isIndex);
   if (value !== null && typeof value === "object"){
     const isArr = Array.isArray(value);
     const entries = isArr ? value.map((v,i) => [String(i), v]) : Object.entries(value);
     const open = isArr ? "[" : "{", close = isArr ? "]" : "}";
     if (!entries.length){
-      return '<div class="jt-line" style="' + pad + '">' + head + '<span class="jt-punct">' + open + close + '</span></div>';
+      return '<div class="' + line + '">' + head + '<span class="' + CLS.jtPunct + '">' + open + close + '</span></div>';
     }
     let inner = "";
     for (const [k,v] of entries) inner += jtNode(v, k, depth + 1, isArr);
-    return '<details class="jt-obj" open><summary class="jt-line" style="' + pad + '">' + head
-      + '<span class="jt-punct">' + open + '</span>'
-      + '<span class="jt-count">' + entries.length + (isArr ? " items" : " keys") + '</span>'
-      + '<span class="jt-punct">' + close + '</span></summary>' + inner + '</details>';
+    return '<details open><summary class="' + line + ' ' + CLS.jtSummary + '">' + head
+      + '<span class="' + CLS.jtPunct + '">' + open + '</span>'
+      + '<span class="' + CLS.jtCount + '">' + entries.length + (isArr ? " items" : " keys") + '</span>'
+      + '<span class="' + CLS.jtPunct + '">' + close + '</span></summary>' + inner + '</details>';
   }
-  return '<div class="jt-line" style="' + pad + '">' + head + jtPrimitive(value) + '</div>';
+  return '<div class="' + line + '">' + head + jtPrimitive(value) + '</div>';
 }
 // Collapsible, syntax-coloured JSON view. Every string goes through esc(JSON.stringify(...))
 // so a malicious claim can never inject markup.
 function jsonTreeView(obj: unknown): string {
-  return '<div class="json-tree">' + jtNode(obj, null, 0, false) + '</div>';
+  return '<div class="' + CLS.tree + '">' + jtNode(obj, null, 0, false) + '</div>';
 }
 function jsonPane(obj: unknown): string {
   return jsonTreeView(obj);
@@ -214,8 +216,8 @@ function setPaneHtml(body: HTMLElement, key: string, html: string): void {
 }
 function claimsPane(obj: JsonObject, headerMode: boolean): string {
   const keys = Object.keys(obj||{});
-  if (!keys.length) return '<div class="empty">No claims.</div>';
-  let rows = '<table class="claims"><thead><tr><th>Claim</th><th>Value</th><th>Description</th></tr></thead><tbody>';
+  if (!keys.length) return '<div class="' + CLS.empty + '">No claims.</div>';
+  let rows = '<table class="' + CLS.claimsTable + '"><thead><tr><th class="' + CLS.claimsTh + '">Claim</th><th class="' + CLS.claimsTh + '">Value</th><th class="' + CLS.claimsTh + '">Description</th></tr></thead><tbody>';
   for (const k of keys){
     const v = obj[k];
     const meta = CLAIM_DOCS[k];
@@ -225,9 +227,9 @@ function claimsPane(obj: JsonObject, headerMode: boolean): string {
       val = fmtDate(v) + "  (" + v + ")";
       desc += " — " + relTime(v) + (k==="exp" ? " from now" : " ago");
     }
-    rows += '<tr><td class="k">' + esc(k) + '</td><td class="v">' + esc(val) + '</td><td class="d">' + esc(desc) + '</td></tr>';
+    rows += '<tr><td class="' + CLS.claimsK + '">' + esc(k) + '</td><td class="' + CLS.claimsV + '">' + esc(val) + '</td><td class="' + CLS.claimsD + '">' + esc(desc) + '</td></tr>';
   }
-  return '<div class="claimwrap">' + rows + '</tbody></table></div>';
+  return '<div class="' + CLS.claimsWrap + '">' + rows + '</tbody></table></div>';
 }
 
 /* ------------------------------------------------------------- decoder */
@@ -246,9 +248,9 @@ function colorizeToken(raw: string): string {
   let out = "";
   const segs = raw.split(".");
   segs.forEach((seg,i)=>{
-    const cls = i===0 ? "h" : i===1 ? "p" : "s";
+    const cls = i===0 ? CLS.seg.h : i===1 ? CLS.seg.p : CLS.seg.s;
     out += '<span class="' + cls + '">' + esc(seg) + "</span>";
-    if (i < segs.length-1) out += '<span class="dot">.</span>';
+    if (i < segs.length-1) out += '<span class="' + CLS.seg.dot + '">.</span>';
   });
   return out + "\n";
 }
@@ -259,7 +261,7 @@ function syncScroll(){
 function renderTokenLayer(){ tokBack.innerHTML = colorizeToken(tokInput.value.trim()); syncScroll(); }
 
 function badge(kind: string, text: string): string {
-  return '<span class="badge ' + kind + '"><span class="dotm"></span>' + esc(text) + "</span>";
+  return '<span class="' + CLS.badgeBase + ' ' + CLS.badge[kind] + '"><span class="' + CLS.dotm + '"></span>' + esc(text) + "</span>";
 }
 
 function decodeToken(){
@@ -275,8 +277,8 @@ function decodeToken(){
   state.sigRaw = state.parts[2] || "";
 
   if (!raw){
-    setPaneHtml(headerBody, "empty:header", '<div class="empty">Paste a token above to see the decoded header.</div>');
-    setPaneHtml(payloadBody, "empty:payload", '<div class="empty">Paste a token above to see the decoded payload.</div>');
+    setPaneHtml(headerBody, "empty:header", '<div class="' + CLS.empty + '">Paste a token above to see the decoded header.</div>');
+    setPaneHtml(payloadBody, "empty:payload", '<div class="' + CLS.empty + '">Paste a token above to see the decoded payload.</div>');
     statusRow.innerHTML = "";
     setSecretLabel(null);
     return;
@@ -298,8 +300,8 @@ function decodeToken(){
       setPaneHtml(payloadBody, "json:" + JSON.stringify(state.payload), jsonPane(state.payload));
     } catch(e){ state.payloadErr = (e as Error).message; }
   }
-  if (state.headerErr) setPaneHtml(headerBody, "err:header:" + state.headerErr, '<div class="empty">Could not decode header: ' + esc(state.headerErr) + "</div>");
-  if (state.payloadErr) setPaneHtml(payloadBody, "err:payload:" + state.payloadErr, '<div class="empty">Could not decode payload: ' + esc(state.payloadErr) + "</div>");
+  if (state.headerErr) setPaneHtml(headerBody, "err:header:" + state.headerErr, '<div class="' + CLS.empty + '">Could not decode header: ' + esc(state.headerErr) + "</div>");
+  if (state.payloadErr) setPaneHtml(payloadBody, "err:payload:" + state.payloadErr, '<div class="' + CLS.empty + '">Could not decode payload: ' + esc(state.payloadErr) + "</div>");
 
   state.alg = state.header && state.header.alg ? String(state.header.alg) : null;
   setSecretLabel(state.alg);
@@ -358,7 +360,7 @@ function scheduleVerify(){
     const el = $("#sigBadge");
     if (el) el.innerHTML = badge("warn", "Unsigned token (alg: none)");
     const st = $("#secretState");
-    if (st) st.innerHTML = '<span style="color:var(--warn)">This token declares alg "none" and carries no signature.</span>';
+    if (st) st.innerHTML = '<span class="' + CLS.warnText + '">This token declares alg "none" and carries no signature.</span>';
     return;
   }
   if (!key){
@@ -382,8 +384,8 @@ async function runVerify(id: number, key: string, raw: string, alg: string): Pro
     const el = slot();
     if (el) el.innerHTML = ok ? badge("ok","Signature Verified (" + alg + ")") : badge("bad","Invalid Signature (" + alg + ")");
     $("#secretState").innerHTML = ok
-      ? '<span style="color:var(--ok)">Key matches this token’s signature.</span>'
-      : '<span style="color:var(--bad)">Key does not produce the token’s signature.</span>';
+      ? '<span class="' + CLS.okText + '">Key matches this token’s signature.</span>'
+      : '<span class="' + CLS.badText + '">Key does not produce the token’s signature.</span>';
   } catch(err){
     if (id !== verifyToken) return;
     state.verifiedKey = null;
@@ -393,12 +395,12 @@ async function runVerify(id: number, key: string, raw: string, alg: string): Pro
     if (el) el.innerHTML = malformed
       ? badge("bad", (err as Error).message)
       : badge("warn", "Verification error — " + (err as Error).message);
-    $("#secretState").innerHTML = '<span style="color:var(--warn)">' + esc((err as Error).message) + "</span>";
+    $("#secretState").innerHTML = '<span class="' + CLS.warnText + '">' + esc((err as Error).message) + "</span>";
   }
 }
 
 function refreshClaimsView(which: string): void {
-  const pane = document.querySelector('.segtab[data-pane="' + which + '"]');
+  const pane = document.querySelector('[data-pane="' + which + '"]');
   const active = pane ? (pane.querySelector("button.active") as HTMLElement | null) : null;
   const view = active ? active.dataset.view : "json";
   const obj = which === "header" ? state.header : state.payload;
@@ -422,7 +424,7 @@ tokInput.addEventListener("keydown", (e: KeyboardEvent)=>{
 });
 secretInput.addEventListener("input", ()=>{ $("#secretState").textContent = ""; scheduleVerify(); });
 
-document.querySelectorAll(".segtab").forEach(tab=>{
+document.querySelectorAll("[data-pane]").forEach(tab=>{
   tab.addEventListener("click",(e: Event)=>{
     const btn = (e.target as Element).closest("button"); if (!btn) return;
     tab.querySelectorAll("button").forEach(x=>x.classList.toggle("active", x===btn));
@@ -456,7 +458,7 @@ $("#btnDecodeToEncode").addEventListener("click", ()=>{
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
     window.scrollTo({ top: 0, behavior: reduce ? "smooth" : "auto" });
   } catch(e){
-    $("#decMsg").innerHTML = '<span class="err">' + esc((e as Error).message) + "</span>";
+    $("#decMsg").innerHTML = '<span class="' + CLS.err + '">' + esc((e as Error).message) + "</span>";
   }
 });
 
@@ -541,9 +543,9 @@ $("#btnSign").addEventListener("click", async ()=>{
   encMsg.innerHTML = "";
   try {
     const t = await signToken();
-    encMsg.innerHTML = '<div class="okmsg">Token signed with ' + esc(encAlg.value) + ". Use “Copy” or paste it into the Decoder tab.</div>";
+    encMsg.innerHTML = '<div class="' + CLS.okmsg + '">Token signed with ' + esc(encAlg.value) + ". Use “Copy” or paste it into the Decoder tab.</div>";
   } catch(e){
-    encMsg.innerHTML = '<div class="err">' + esc((e as Error).message) + "</div>";
+    encMsg.innerHTML = '<div class="' + CLS.err + '">' + esc((e as Error).message) + "</div>";
   }
 });
 
@@ -574,21 +576,21 @@ $("#btnVerifyOwn").addEventListener("click", async ()=>{
     const alg = encAlg.value || "HS256";
     const token = await signToken();
     if (alg === "none"){
-      encMsg.innerHTML = '<div class="okmsg">Unsigned token created (alg: none) — there is no signature to verify.</div>';
+      encMsg.innerHTML = '<div class="' + CLS.okmsg + '">Unsigned token created (alg: none) — there is no signature to verify.</div>';
       return;
     }
     const ok = await roundTripVerify(token, alg, encKey.value.trim());
     encMsg.innerHTML = ok
-      ? '<div class="okmsg">Round-trip OK — ' + (alg.startsWith("HS") ? "the secret" : "a public key derived from your private key") + " verifies this token.</div>"
-      : '<div class="err">Round-trip FAILED — signature did not verify.</div>';
+      ? '<div class="' + CLS.okmsg + '">Round-trip OK — ' + (alg.startsWith("HS") ? "the secret" : "a public key derived from your private key") + " verifies this token.</div>"
+      : '<div class="' + CLS.err + '">Round-trip FAILED — signature did not verify.</div>';
   } catch(e){
-    encMsg.innerHTML = '<div class="err">' + esc((e as Error).message) + "</div>";
+    encMsg.innerHTML = '<div class="' + CLS.err + '">' + esc((e as Error).message) + "</div>";
   }
 });
 
 $("#btnCopyPub").addEventListener("click", async ()=>{
   const v = $<HTMLTextAreaElement>("#encPubKey").value;
-  if (!v){ encMsg.innerHTML = '<div class="err">No public key yet — generate a key pair first.</div>'; return; }
+  if (!v){ encMsg.innerHTML = '<div class="' + CLS.err + '">No public key yet — generate a key pair first.</div>'; return; }
   try { await navigator.clipboard.writeText(v); } catch(e){}
   const b = $("#btnCopyPub"), old = b.textContent;
   b.textContent = "Copied!"; setTimeout(()=>{ b.textContent = old; }, 1200);
@@ -613,7 +615,7 @@ $("#btnSendDecode").addEventListener("click", async ()=>{
     const reduce = window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
     window.scrollTo({ top: 0, behavior: reduce ? "smooth" : "auto" });
   } catch(e){
-    encMsg.innerHTML = '<div class="err">' + esc((e as Error).message) + "</div>";
+    encMsg.innerHTML = '<div class="' + CLS.err + '">' + esc((e as Error).message) + "</div>";
   }
 });
 
@@ -624,7 +626,7 @@ function hdrB64(){
 }
 
 $("#btnCopyOut").addEventListener("click", async ()=>{
-  if (!lastSignedToken){ encMsg.innerHTML = '<div class="err">Nothing to copy yet — sign a token first.</div>'; return; }
+  if (!lastSignedToken){ encMsg.innerHTML = '<div class="' + CLS.err + '">Nothing to copy yet — sign a token first.</div>'; return; }
   try { await navigator.clipboard.writeText(lastSignedToken); }
   catch(e){
     const ta = document.createElement("textarea");
@@ -650,9 +652,9 @@ $("#btnGenKeys").addEventListener("click", async ()=>{
     encKey.value = priv;
     $<HTMLTextAreaElement>("#encPubKey").value = pub;
     $("#pubKeyWrap").classList.remove("hidden");
-    encMsg.innerHTML = '<div class="okmsg">Key pair generated (' + esc(alg.startsWith("ES") ? curveFor(alg) : "2048-bit RSA") + "). Private key above, public key below.</div>";
+    encMsg.innerHTML = '<div class="' + CLS.okmsg + '">Key pair generated (' + esc(alg.startsWith("ES") ? curveFor(alg) : "2048-bit RSA") + "). Private key above, public key below.</div>";
     (window as unknown as Record<string, unknown>).__generatedPublicKey = pub;
-  } catch(e){ encMsg.innerHTML = '<div class="err">' + esc((e as Error).message) + "</div>"; }
+  } catch(e){ encMsg.innerHTML = '<div class="' + CLS.err + '">' + esc((e as Error).message) + "</div>"; }
 });
 
 // Populate the Encoder from a decoded token. Pure state change so it is testable without

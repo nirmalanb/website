@@ -1,0 +1,88 @@
+---
+import { CLS } from '../../scripts/jwt-ui.ts';
+---
+
+<!-- Decoder panel. Every id here is read by src/scripts/jwt-decoder.ts. -->
+<section id="viewDecode" role="tabpanel" aria-labelledby="tabDecode">
+  <div class={CLS.card}>
+    <div class={CLS.toolbar}>
+      <p class={CLS.hintInline}>Paste a JWT below to decode, validate and verify it.</p>
+      <div class={CLS.spacer}></div>
+      <button class={`${CLS.btnGhost} ${CLS.btnSm}`} id="btnExample">Generate example</button>
+      <button class={`${CLS.btnGhost} ${CLS.btnSm}`} id="btnClearToken">Clear</button>
+      <button class={`${CLS.btnGhost} ${CLS.btnSm}`} id="btnDecodeToEncode">Edit in Encoder →</button>
+    </div>
+
+    <label class={CLS.fieldLabel} for="tokInput">Encoded Token</label>
+    <div class={CLS.tokWrap}>
+      <pre id="tokBack" class={CLS.tokLayer + ' ' + CLS.tokBack} aria-hidden="true"></pre>
+      <textarea
+        id="tokInput"
+        class={CLS.tokLayer + ' ' + CLS.tokInput}
+        spellcheck="false"
+        autocomplete="off"
+        aria-describedby="statusRow"
+        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"></textarea>
+    </div>
+
+    <div class={CLS.status} id="statusRow"></div>
+    <div id="decMsg"></div>
+  </div>
+
+  <div class={CLS.card}>
+    <div class={CLS.pane}>
+      <div class={CLS.paneHead}>
+        <span class={CLS.paneTitle}>Decoded Header</span>
+        <div class={CLS.segTab} data-pane="header">
+          <button class={CLS.segTabBtn + ' active'} data-view="json">JSON</button>
+          <button class={CLS.segTabBtn} data-view="claims">Claims Breakdown</button>
+        </div>
+      </div>
+      <div id="headerBody">
+        <div class={CLS.empty}>Paste a token above to see the decoded header.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class={CLS.card}>
+    <div class={CLS.pane}>
+      <div class={CLS.paneHead}>
+        <span class={CLS.paneTitle}>Decoded Payload</span>
+        <div class={CLS.segTab} data-pane="payload">
+          <button class={CLS.segTabBtn + ' active'} data-view="json">JSON</button>
+          <button class={CLS.segTabBtn} data-view="claims">Claims Breakdown</button>
+        </div>
+      </div>
+      <div id="payloadBody">
+        <div class={CLS.empty}>Paste a token above to see the decoded payload.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class={CLS.card}>
+    <h2 class={CLS.cardHead}>
+      JWT Signature Verification
+      <span class={CLS.cardHeadOpt}>(Optional)</span>
+    </h2>
+    <p class={CLS.hint}>
+      Enter the secret used to sign the JWT. For RS* / PS* / ES* algorithms paste a PEM public
+      key.
+    </p>
+    <label class={CLS.fieldLabel} id="secretLabel" for="secretInput">Secret</label>
+    <div class="flex flex-wrap items-start gap-3.5">
+      <div class="min-w-[260px] flex-[2_1_380px]">
+        <textarea
+          id="secretInput"
+          class={CLS.field + ' min-h-[78px]'}
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="a-string-secret-at-least-256-bits-long">a-string-secret-at-least-256-bits-long</textarea>
+        <div class={CLS.genrow}><span class={CLS.kv} id="secretState"></span></div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button class={`${CLS.btnGhost} ${CLS.btnSm}`} id="btnExampleSecret">Use example secret</button>
+        <button class={`${CLS.btnGhost} ${CLS.btnSm}`} id="btnClearSecret">Clear</button>
+      </div>
+    </div>
+  </div>
+</section>

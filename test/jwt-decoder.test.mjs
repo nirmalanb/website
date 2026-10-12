@@ -161,24 +161,38 @@ const demoExpect = crypto.createHmac("sha256", "a-string-secret-at-least-256-bit
 assert.strictEqual(d.s, demoExpect, "demo token signature must match the prefilled secret");
 ok("prefilled demo token verifies with the prefilled secret in the UI");
 
-/* ------------------- 7. Astro page wires the same ids ------------------- */
+/* ------------------- 7. Astro markup wires the same ids ----------------- */
 // The app is injected via innerHTML for badges/claims/panes; every id the script looks
-// up from the static markup must exist in the .astro page, or the tool silently no-ops.
-const astro = fs.readFileSync(new URL("../src/pages/tools/jwt-decoder.astro", import.meta.url), "utf8");
-const script = fs.readFileSync(new URL("../src/scripts/jwt-decoder.ts", import.meta.url), "utf8");
-const staticIds = new Set([...astro.matchAll(/\bid="([^"]+)"/g)].map((x) => x[1]));
-const referenced = new Set([...script.matchAll(/\$\("#([A-Za-z0-9_-]+)"\)/g)].map((x) => x[1]));
+// up from the static markup must exist, or the tool silently no-ops. Markup lives in the
+// page plus the tool components; the script may be one file or a folder of modules.
+function readAll(dir, ext) {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const path = new URL(entry.name + (entry.isDirectory() ? "/" : ""), dir);
+    if (entry.isDirectory()) out.push(...readAll(path, ext));
+    else if (entry.name.endsWith(ext)) out.push(fs.readFileSync(path, "utf8"));
+  }
+  return out;
+}
+const markup = [
+  fs.readFileSync(new URL("../src/pages/tools/jwt-decoder.astro", import.meta.url), "utf8"),
+  ...readAll(new URL("../src/components/tools/", import.meta.url), ".astro"),
+].join("\n");
+const script = readAll(new URL("../src/scripts/", import.meta.url), ".ts").join("\n");
+const staticIds = new Set([...markup.matchAll(/\bid="([^"]+)"/g)].map((x) => x[1]));
+const referenced = new Set([...script.matchAll(/["']#([A-Za-z0-9_-]+)["']/g)].map((x) => x[1]));
 // sigBadge is created at runtime inside #statusRow, so it is legitimately absent.
 referenced.delete("sigBadge");
 const missing = [...referenced].filter((id) => !staticIds.has(id));
-assert.deepStrictEqual(missing, [], "ids referenced by JS but missing from the .astro page: " + missing.join(", "));
-ok("every statically referenced DOM id exists in the .astro markup");
+assert.deepStrictEqual(missing, [], "ids referenced by JS but missing from markup: " + missing.join(", "));
+ok("every statically referenced DOM id exists in the markup");
 
 // The build hook in astro.config.mjs keys its one-script budget off this marker.
-assert.ok(astro.includes("data-tool-mount"), "tool page must keep its data-tool-mount marker");
+assert.ok(markup.includes("data-tool-mount"), "tool page must keep its data-tool-mount marker");
 ok("tool page declares data-tool-mount for the build's script budget");
 
 /* ------------------- 8. JSON viewer ------------------------------------- */
+const { CLS } = await import("../src/scripts/jwt-ui.ts");
 const tree = api.jsonTreeView({
   evil: '<img src=x onerror=alert(1)>',
   n: 5,
@@ -189,12 +203,16 @@ const tree = api.jsonTreeView({
 });
 assert.strictEqual(tree.includes("<img"), false, "tree viewer must escape claim strings (XSS)");
 assert.ok(tree.includes("&lt;img"), "tree viewer should show the escaped string");
-for (const cls of ["jt-key", "jt-str", "jt-num", "jt-bool", "jt-null", "jt-punct", "jt-count"]) {
-  assert.ok(tree.includes(cls), "tree viewer missing ." + cls);
+for (const cls of [CLS.jtKey, CLS.jtStr, CLS.jtNum, CLS.jtBool, CLS.jtNull, CLS.jtPunct, CLS.jtCount]) {
+  assert.ok(tree.includes(cls), "tree viewer missing class: " + cls);
 }
 assert.ok(tree.includes("<details"), "nested objects should be collapsible");
 assert.ok(api.jsonTreeView({}).includes("{}"), "empty object should render {}");
 assert.ok(api.jsonTreeView([]).includes("[]"), "empty array should render []");
+// "styling only Tailwind": the runtime-generated markup must carry no inline styles or
+// hand-rolled CSS variables — only class utilities.
+assert.strictEqual(tree.includes("style="), false, "generated tree must not use inline styles");
+assert.strictEqual(tree.includes("var(--"), false, "generated tree must not use custom CSS vars");
 ok("JSON tree viewer escapes input, colours types and collapses objects");
 
 /* --------------- 9. decoder panes render the tree ----------------------- */
@@ -203,7 +221,7 @@ const statusEl = globalThis.document.querySelector("#statusRow");
 const headerEl = globalThis.document.querySelector("#headerBody");
 tokEl.value = DEMO;
 api.decodeToken();
-assert.ok(headerEl.innerHTML.includes("json-tree"), "header pane should use the JSON tree");
+assert.ok(headerEl.innerHTML.includes(CLS.tree), "header pane should use the JSON tree");
 assert.ok(statusEl.innerHTML.includes("Valid JWT"), "demo token should show a valid badge");
 const firstKey = headerEl.dataset.jwtKey;
 api.decodeToken();
